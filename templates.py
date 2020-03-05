@@ -1,114 +1,77 @@
-import bisect
-import copy
-from typing import Tuple, Optional
+from abc import ABC, abstractmethod
+from typing import Tuple
+from PIL import Image, ImageDraw, ImageFont
+
 import numpy as np
 
-
-class Keyframe:
-    __slots__ = 'frame_ind',
-
-    def copy(self):
-        return copy.deepcopy(self)
-
-    def __init__(self, frame_ind: int):
-        self.frame_ind = frame_ind
-
-    def __lt__(self, other: 'Keyframe'):
-        return self.frame_ind < other.frame_ind
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}(frame_ind={self.frame_ind})'
+from gif import GifSequence, GifFrame
+from keyframes import TextAnimationKeyframeCollection, TextAnimationKeyframe
 
 
-class KeyframeCollection:
-    def __init__(self):
-        self._keyframes = []
+class AnimationTemplate(ABC):
+    __slots__ = 'keyframes',
 
-    def insert_keyframe(self, keyframe: Keyframe):
-        bisect.insort(self._keyframes, keyframe)
-
-    @property
-    def frames_indices(self):
-        return [keyframe.frame_ind for keyframe in self._keyframes]
-
-    def __getitem__(self, item) -> Keyframe:
-        return self._keyframes[item]
-
-    def __len__(self):
-        return len(self._keyframes)
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self._keyframes})'
+    @abstractmethod
+    def render(self, sequence: GifSequence, content):
+        raise NotImplementedError
 
 
-class TextAnimationKeyframeCollection(KeyframeCollection):
-    def __getitem__(self, item) -> 'TextAnimationKeyframe':
-        return self._keyframes[item]
+class TextAnimationTemplate(AnimationTemplate):
 
-    def interpolate(self, frame_ind: int) -> 'TextAnimationKeyframe':
-        all_position_x = [(keyframe.frame_ind, keyframe.x) for keyframe in self if keyframe.x is not None]
-        all_position_y = [(keyframe.frame_ind, keyframe.y) for keyframe in self if keyframe.y is not None]
-        all_text_size = [(keyframe.frame_ind, keyframe.text_size)
-                         for keyframe in self if keyframe.text_size is not None]
+    def __init__(self, initial_position: Tuple[int, int], initial_text_size):
+        self.keyframes: TextAnimationKeyframeCollection = TextAnimationKeyframeCollection()
+        self.keyframes.insert_keyframe(TextAnimationKeyframe(frame_ind=0,
+                                                             position=initial_position,
+                                                             text_size=initial_text_size))
+        self.font = ImageFont.truetype('Montserrat-Regular.ttf', size=initial_text_size)
 
-        assert all_position_x and all_position_y and all_text_size
+    def render(self, sequence: GifSequence, content: str):
+        rendered_frames = []
+        for frame_ind, frame in enumerate(sequence):
+            rendered_frames.append(self._render_frame(frame=frame, frame_ind=frame_ind, content=content))
+        return GifSequence.from_frames(rendered_frames, is_loop=sequence.is_loop)
 
-        interp_x = int(np.interp(frame_ind, *zip(*all_position_x)))
-        interp_y = int(np.interp(frame_ind, *zip(*all_position_y)))
-        interp_text_size = int(np.interp(frame_ind, *zip(*all_text_size)))
+    def _render_frame(self, frame: GifFrame, frame_ind: int, content: str) -> GifFrame:
+        current_state: TextAnimationKeyframe = self.keyframes.interpolate(frame_ind=frame_ind)
+        image = frame.to_image()
+        self._draw_outlined_text(image, position=current_state.position, content=content, font=self.font, width=1)
+        return GifFrame(image)
 
-        return TextAnimationKeyframe(frame_ind=frame_ind,
-                                     position=(interp_x, interp_y),
-                                     text_size=interp_text_size)
+    @staticmethod
+    def _draw_outlined_text(image, position: Tuple[int, int], content: str, font: ImageFont.ImageFont, width=1):
 
-        # TODO: implement using binary search
-        # keyframe_before = None
-        # keyframe_after = None
-        #
-        # frames_indices = self.frames_indices
-        # insertion_index = bisect.bisect_left(frames_indices, frame_ind)
-        # print(insertion_index)
-        #
-        # if insertion_index < len(self):
-        #     if frame_ind == self[insertion_index].frame_ind:
-        #         return self[insertion_index].copy()
-        #
-        #     keyframe_ind_before = insertion_index - 1
-        #     keyframe_ind_after = insertion_index
+        black_alpha = 255
+        white_alpha = 240
 
+        overlay = Image.new('RGBA', image.size)
+        draw = ImageDraw.ImageDraw(overlay, 'RGBA')
 
-class TextAnimationKeyframe(Keyframe):
-    def __init__(self, frame_ind: int, position: Optional[Tuple[int, int]] = None, text_size=None):
-        super().__init__(frame_ind)
-        self.x, self.y = position
-        self.text_size = text_size
+        # Draw black text outlines
+        for x in range(-width, 1 + width):
+            for y in range(-width, 1 + width):
+                pos = (position[0] + x, position[1] + y)
+                draw.multiline_text(pos, content, (0, 0, 0, black_alpha),
+                                    font=font, align='center')
 
-    @property
-    def position(self):
-        return self.x, self.y
+        # Draw inner white text
+        draw.text(position, content, (255, 255, 255, white_alpha),
+                  font=font, align='center')
 
-    @position.setter
-    def position(self, new_position: Tuple[int, int]):
-        self.x, self.y = new_position
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}' \
-               f'(frame_ind={self.frame_ind}, ' \
-               f'position={self.position}, ' \
-               f'text_size={self.text_size})'
+        image.paste(overlay, None, overlay)
 
 
 if __name__ == '__main__':
-    a = TextAnimationKeyframe(frame_ind=8, position=(50, 60))
-    b = TextAnimationKeyframe(frame_ind=2, position=(0, 0), text_size=20)
-    c = TextAnimationKeyframe(frame_ind=4, position=(20, 30))
-    collection = TextAnimationKeyframeCollection()
-    collection.insert_keyframe(a)
-    print(collection)
-    collection.insert_keyframe(b)
-    print(collection)
-    collection.insert_keyframe(c)
-    print(collection)
+    template = TextAnimationTemplate(initial_position=(50, 50), initial_text_size=30)
 
-    collection.insert_keyframe(collection.interpolate(6))
-    print(collection)
+    keyframe1 = TextAnimationKeyframe(frame_ind=3, position=(80, 100))
+    keyframe2 = TextAnimationKeyframe(frame_ind=7, position=(150, 50))
+    keyframe3 = TextAnimationKeyframe(frame_ind=10, position=(50, 50))
+    template.keyframes.insert_keyframe(keyframe1)
+    template.keyframes.insert_keyframe(keyframe2)
+    template.keyframes.insert_keyframe(keyframe3)
+
+    gif = GifSequence.open('tenor.gif', is_loop=True)
+    print(len(gif))
+    rendered = template.render(gif, "Hello World!")
+    rendered.show()
+    rendered.save("hello_world2.gif")
