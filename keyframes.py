@@ -81,20 +81,14 @@ class TextAnimationKeyframeCollection(KeyframeCollection):
                                      position=(interp_x, interp_y),
                                      text_size=interp_text_size)
 
-        # TODO: implement using binary search
-        # keyframe_before = None
-        # keyframe_after = None
-        #
-        # frames_indices = self.frames_indices
-        # insertion_index = bisect.bisect_left(frames_indices, frame_ind)
-        # print(insertion_index)
-        #
-        # if insertion_index < len(self):
-        #     if frame_ind == self[insertion_index].frame_ind:
-        #         return self[insertion_index].copy()
-        #
-        #     keyframe_ind_before = insertion_index - 1
-        #     keyframe_ind_after = insertion_index
+    def serialize(self) -> List[dict]:
+        return [keyframe.serialize() for keyframe in self]
+
+    def deserialize(self, list_of_keyframes) -> 'TextAnimationKeyframeCollection':
+        collection = TextAnimationKeyframeCollection()
+        for keyframe_dict in list_of_keyframes:
+            collection.insert_keyframe(TextAnimationKeyframe.deserialize(keyframe_dict))
+        return collection
 
 
 class TextAnimationKeyframe(Keyframe):
@@ -116,6 +110,15 @@ class TextAnimationKeyframe(Keyframe):
     @position.setter
     def position(self, new_position: Tuple[int, int]):
         self.x, self.y = new_position
+
+    def serialize(self) -> dict:
+        return dict(frame_ind=self.frame_ind, position=self.position, text_size=self.text_size)
+
+    @classmethod
+    def deserialize(cls, serialized_dict: dict) -> 'TextAnimationKeyframe':
+        return cls(frame_ind=serialized_dict['frame_ind'],
+                   position=serialized_dict['position'],
+                   text_size=serialized_dict['text_size'])
 
     def __repr__(self):
         return f'{self.__class__.__name__}' \

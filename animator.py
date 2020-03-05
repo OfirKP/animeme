@@ -1,3 +1,4 @@
+import json
 import sys
 import os
 from pathlib import Path
@@ -65,7 +66,7 @@ class MainWindow(QMainWindow):
         widget = QWidget()
         layout = QVBoxLayout()
         self.button = QPushButton('Save', self)
-        self.button.clicked.connect(lambda: self.sequence.save("output.gif"))
+        self.button.clicked.connect(self.on_click_save)
 
         layout.addWidget(self.image_view)
         layout.addWidget(self.frames_slider)
@@ -91,6 +92,11 @@ class MainWindow(QMainWindow):
         self.render_sequence()
         self.refresh_frame()
         print(x, y)
+
+    def on_click_save(self):
+        with open('output.json', mode='w') as f:
+            json.dump(self.text_template.keyframes.serialize(), fp=f, indent=4)
+        self.sequence.save("output.gif")
 
 
 if __name__ == '__main__':
