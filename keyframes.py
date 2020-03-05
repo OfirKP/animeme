@@ -1,7 +1,7 @@
 import bisect
 import copy
 from abc import abstractmethod, ABC
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Type, Union
 import numpy as np
 
 
@@ -55,7 +55,7 @@ class TextAnimationKeyframeCollection(KeyframeCollection):
     DEFAULT_POSITION = (20, 20)
     DEFAULT_TEXT_SIZE = 50
 
-    def __getitem__(self, item) -> 'TextAnimationKeyframe':
+    def __getitem__(self, item) -> Union['TextAnimationKeyframe', List['TextAnimationKeyframe']]:
         return self._keyframes[item]
 
     def interpolate(self, frame_ind: int) -> 'TextAnimationKeyframe':

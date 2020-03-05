@@ -15,7 +15,7 @@ from cv2 import cv2
 
 from gif import GifSequence
 from keyframes import TextAnimationKeyframe
-from templates import TextAnimationTemplate
+from templates import TextAnimationTemplate, MemeAnimationTemplate
 
 
 class PictureLabel(QLabel):
@@ -41,15 +41,19 @@ class PictureLabel(QLabel):
 # Subclass QMainWindow to customise your application's main window
 class MainWindow(QMainWindow):
 
-    def __init__(self, path_to_gif: Union[Path, str], *args, **kwargs):
+    def __init__(self, path_to_gif: Union[Path, str], meme_template: MemeAnimationTemplate, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
 
         self.setWindowTitle(f"Animator - {os.path.basename(path_to_gif)}")
         self.original_sequence = GifSequence.open(path=path_to_gif, method="mpy")
         self.sequence = self.original_sequence
 
-        self.text_template = TextAnimationTemplate()
-        self.text = "Hello"
+        self.meme_template = meme_template
+        self.selected_text_template = meme_template.templates_list[0]
+        self.render_options = {
+            "Text 1": "Hello",
+            "Text 2": "World!"
+        }
 
         self.current_frame_index = 0
         self.frames_slider = QSlider(Qt.Horizontal, self)
@@ -76,7 +80,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(widget)
 
     def render_sequence(self):
-        self.sequence = self.text_template.render(self.original_sequence, self.text)
+        self.sequence = self.meme_template.render(self.original_sequence, self.render_options)
 
     def refresh_frame(self):
         self.image_view.setImage(self.sequence[self.frames_slider.value()].array)
@@ -87,11 +91,13 @@ class MainWindow(QMainWindow):
 
     def handle_image_press(self, position: Tuple[int, int]):
         center_x, center_y = position
-        text_width, text_height = self.text_template.font.getsize(self.text)
+        text_width, text_height = self.selected_text_template.font.getsize(
+            self.render_options[self.selected_text_template.id]
+        )
         top_left_x = center_x - text_width // 2
         top_left_y = center_y - text_height // 2
 
-        self.text_template.keyframes.insert_keyframe(
+        self.selected_text_template.keyframes.insert_keyframe(
             TextAnimationKeyframe(frame_ind=self.current_frame_index, position=(top_left_x, top_left_y))
         )
         self.render_sequence()
@@ -107,7 +113,10 @@ class MainWindow(QMainWindow):
 if __name__ == '__main__':
     app = QApplication([])
 
-    window = MainWindow("trump.gif")
+    text_template = TextAnimationTemplate("Text 1")
+    text_template2 = TextAnimationTemplate("Text 2")
+    meme_template = MemeAnimationTemplate(text_templates=[text_template, text_template2])
+    window = MainWindow("trump.gif", meme_template=meme_template)
     window.show()
 
     app.exec_()

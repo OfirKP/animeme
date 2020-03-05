@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List, Dict
 from PIL import Image, ImageDraw, ImageFont
 
 import numpy as np
@@ -18,8 +18,10 @@ class AnimationTemplate(ABC):
 
 class TextAnimationTemplate(AnimationTemplate):
     def __init__(self,
+                 template_id: str,
                  initial_position: Optional[Tuple[int, int]] = None,
                  initial_text_size: Optional[int] = None):
+        self.id = template_id
         self.keyframes: TextAnimationKeyframeCollection = TextAnimationKeyframeCollection()
         if initial_position is not None or initial_text_size is not None:
             self.keyframes.insert_keyframe(TextAnimationKeyframe(frame_ind=0,
@@ -66,8 +68,28 @@ class TextAnimationTemplate(AnimationTemplate):
         image.paste(overlay, None, overlay)
 
 
+class MemeAnimationTemplate:
+    __slots__ = 'text_templates', 'templates_dict'
+
+    def __init__(self, text_templates: List[TextAnimationTemplate]):
+        self.templates_dict: Dict[str, TextAnimationTemplate] = \
+            {text_template.id: text_template for text_template in text_templates}
+
+    @property
+    def templates_list(self) -> List[TextAnimationTemplate]:
+        return list(self.templates_dict.values())
+
+    def render(self, sequence: GifSequence, render_options: Dict[str, str]) -> GifSequence:
+        for template_id, content in render_options.items():
+            sequence = self.templates_dict[template_id].render(sequence=sequence, content=content)
+        return sequence
+
+    def __getitem__(self, template_id: str) -> TextAnimationTemplate:
+        return self.templates_dict[template_id]
+
+
 if __name__ == '__main__':
-    template = TextAnimationTemplate(initial_position=(50, 50), initial_text_size=30)
+    template = TextAnimationTemplate("Text", initial_position=(50, 50), initial_text_size=30)
 
     # keyframe1 = TextAnimationKeyframe(frame_ind=3, position=(80, 100))
     # keyframe2 = TextAnimationKeyframe(frame_ind=7, position=(150, 50))
