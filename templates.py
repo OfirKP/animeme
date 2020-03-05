@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Tuple
+from typing import Tuple, Optional
 from PIL import Image, ImageDraw, ImageFont
 
 import numpy as np
@@ -17,13 +17,15 @@ class AnimationTemplate(ABC):
 
 
 class TextAnimationTemplate(AnimationTemplate):
-
-    def __init__(self, initial_position: Tuple[int, int], initial_text_size):
+    def __init__(self,
+                 initial_position: Optional[Tuple[int, int]] = None,
+                 initial_text_size: Optional[int] = None):
         self.keyframes: TextAnimationKeyframeCollection = TextAnimationKeyframeCollection()
-        self.keyframes.insert_keyframe(TextAnimationKeyframe(frame_ind=0,
-                                                             position=initial_position,
-                                                             text_size=initial_text_size))
-        self.font = ImageFont.truetype('Montserrat-Regular.ttf', size=initial_text_size)
+        if initial_position is not None or initial_text_size is not None:
+            self.keyframes.insert_keyframe(TextAnimationKeyframe(frame_ind=0,
+                                                                 position=initial_position,
+                                                                 text_size=initial_text_size))
+        self.font = ImageFont.truetype('Montserrat-Regular.ttf', size=TextAnimationKeyframeCollection.DEFAULT_TEXT_SIZE)
 
     def render(self, sequence: GifSequence, content: str):
         rendered_frames = []
@@ -38,7 +40,11 @@ class TextAnimationTemplate(AnimationTemplate):
         return GifFrame(image)
 
     @staticmethod
-    def _draw_outlined_text(image, position: Tuple[int, int], content: str, font: ImageFont.ImageFont, width=1):
+    def _draw_outlined_text(image: Image,
+                            position: Tuple[int, int],
+                            content: str,
+                            font: ImageFont.ImageFont,
+                            width=1):
 
         black_alpha = 255
         white_alpha = 240
@@ -63,12 +69,12 @@ class TextAnimationTemplate(AnimationTemplate):
 if __name__ == '__main__':
     template = TextAnimationTemplate(initial_position=(50, 50), initial_text_size=30)
 
-    keyframe1 = TextAnimationKeyframe(frame_ind=3, position=(80, 100))
-    keyframe2 = TextAnimationKeyframe(frame_ind=7, position=(150, 50))
-    keyframe3 = TextAnimationKeyframe(frame_ind=10, position=(50, 50))
-    template.keyframes.insert_keyframe(keyframe1)
-    template.keyframes.insert_keyframe(keyframe2)
-    template.keyframes.insert_keyframe(keyframe3)
+    # keyframe1 = TextAnimationKeyframe(frame_ind=3, position=(80, 100))
+    # keyframe2 = TextAnimationKeyframe(frame_ind=7, position=(150, 50))
+    # keyframe3 = TextAnimationKeyframe(frame_ind=10, position=(50, 50))
+    # template.keyframes.insert_keyframe(keyframe1)
+    # template.keyframes.insert_keyframe(keyframe2)
+    # template.keyframes.insert_keyframe(keyframe3)
 
     gif = GifSequence.open('tenor.gif', is_loop=True)
     print(len(gif))

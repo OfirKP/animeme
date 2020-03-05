@@ -1,14 +1,19 @@
 import bisect
 import copy
-from typing import Tuple, Optional
+from abc import abstractmethod, ABC
+from typing import Tuple, Optional, List
 import numpy as np
 
 
-class Keyframe:
+class Keyframe(ABC):
     __slots__ = 'frame_ind',
 
     def copy(self):
         return copy.deepcopy(self)
+
+    @abstractmethod
+    def update_keyframe(self, new_keyframe: 'Keyframe'):
+        raise NotImplementedError
 
     def __init__(self, frame_ind: int):
         self.frame_ind = frame_ind
@@ -20,12 +25,17 @@ class Keyframe:
         return f'{self.__class__.__name__}(frame_ind={self.frame_ind})'
 
 
-class KeyframeCollection:
+class KeyframeCollection(ABC):
     def __init__(self):
         self._keyframes = []
 
     def insert_keyframe(self, keyframe: Keyframe):
-        bisect.insort(self._keyframes, keyframe)
+        insertion_index = bisect.bisect_left(self._keyframes, keyframe)
+
+        if insertion_index < len(self) and keyframe.frame_ind == self._keyframes[insertion_index].frame_ind:
+            self._keyframes[insertion_index].update_keyframe(new_keyframe=keyframe)
+        else:
+            self._keyframes.insert(insertion_index, keyframe)
 
     @property
     def keyframes_indices(self):
@@ -42,6 +52,9 @@ class KeyframeCollection:
 
 
 class TextAnimationKeyframeCollection(KeyframeCollection):
+    DEFAULT_POSITION = (20, 20)
+    DEFAULT_TEXT_SIZE = 50
+
     def __getitem__(self, item) -> 'TextAnimationKeyframe':
         return self._keyframes[item]
 
@@ -51,11 +64,18 @@ class TextAnimationKeyframeCollection(KeyframeCollection):
         all_text_size = [(keyframe.frame_ind, keyframe.text_size)
                          for keyframe in self if keyframe.text_size is not None]
 
-        assert all_position_x and all_position_y and all_text_size
+        assert len(all_position_x) == len(all_position_y)
 
-        interp_x = int(np.interp(frame_ind, *zip(*all_position_x)))
-        interp_y = int(np.interp(frame_ind, *zip(*all_position_y)))
-        interp_text_size = int(np.interp(frame_ind, *zip(*all_text_size)))
+        if all_position_x:
+            interp_x = int(np.interp(frame_ind, *zip(*all_position_x)))
+            interp_y = int(np.interp(frame_ind, *zip(*all_position_y)))
+        else:
+            interp_x, interp_y = self.DEFAULT_POSITION
+
+        if all_text_size:
+            interp_text_size = int(np.interp(frame_ind, *zip(*all_text_size)))
+        else:
+            interp_text_size = self.DEFAULT_TEXT_SIZE
 
         return TextAnimationKeyframe(frame_ind=frame_ind,
                                      position=(interp_x, interp_y),
@@ -82,6 +102,12 @@ class TextAnimationKeyframe(Keyframe):
         super().__init__(frame_ind)
         self.x, self.y = position
         self.text_size = text_size
+
+    def update_keyframe(self, new_keyframe: 'TextAnimationKeyframe'):
+        if new_keyframe.position is not None:
+            self.position = new_keyframe.position
+        if new_keyframe.text_size is not None:
+            self.text_size = new_keyframe.text_size
 
     @property
     def position(self):
