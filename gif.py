@@ -9,6 +9,8 @@ import numpy as np
 import cv2.cv2 as cv2
 import itertools
 
+from moviepy.video.io.VideoFileClip import VideoFileClip
+
 
 class GifSequence:
     def __init__(self, images: Iterable[Image.Image], is_loop: bool = False):
@@ -24,10 +26,21 @@ class GifSequence:
         self._durations_array: np.ndarray = np.array(list_of_durations)
 
     @classmethod
-    def open(cls, path: Union[str, Path], is_loop: bool = False):
+    def open(cls, path: Union[str, Path], is_loop: bool = False, method: str = "pillow"):
         image_file = Image.open(path)
         assert type(image_file) is GifImagePlugin.GifImageFile
-        return cls(ImageSequence.Iterator(image_file), is_loop=is_loop)
+
+        if method == "pillow":
+            return cls(ImageSequence.Iterator(image_file), is_loop=is_loop)
+        elif method == "mpy":
+            durations = [image.info['duration'] for image in ImageSequence.Iterator(image_file)]
+            clip = VideoFileClip(path)
+            frames = []
+            for frame, duration in zip(clip.iter_frames(), durations):
+                frames.append(GifFrame.from_array(array=frame, duration=duration))
+            return GifSequence.from_frames(frames, is_loop=is_loop)
+        else:
+            raise ValueError("Method must be either pillow or mpy (moviepy)")
 
     @classmethod
     def from_frames(cls, frames: Iterable['GifFrame'], is_loop: bool = False):
