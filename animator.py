@@ -49,6 +49,7 @@ class MainWindow(QMainWindow):
         self.sequence = self.original_sequence
 
         self.text_template = TextAnimationTemplate()
+        self.text = "Hello"
 
         self.current_frame_index = 0
         self.frames_slider = QSlider(Qt.Horizontal, self)
@@ -75,7 +76,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(widget)
 
     def render_sequence(self):
-        self.sequence = self.text_template.render(self.original_sequence, "Hello")
+        self.sequence = self.text_template.render(self.original_sequence, self.text)
 
     def refresh_frame(self):
         self.image_view.setImage(self.sequence[self.frames_slider.value()].array)
@@ -85,18 +86,22 @@ class MainWindow(QMainWindow):
         self.refresh_frame()
 
     def handle_image_press(self, position: Tuple[int, int]):
-        x, y = position
+        center_x, center_y = position
+        text_width, text_height = self.text_template.font.getsize(self.text)
+        top_left_x = center_x - text_width // 2
+        top_left_y = center_y - text_height // 2
+
         self.text_template.keyframes.insert_keyframe(
-            TextAnimationKeyframe(frame_ind=self.current_frame_index, position=position)
+            TextAnimationKeyframe(frame_ind=self.current_frame_index, position=(top_left_x, top_left_y))
         )
         self.render_sequence()
         self.refresh_frame()
-        print(x, y)
 
     def on_click_save(self):
         with open('output.json', mode='w') as f:
             json.dump(self.text_template.keyframes.serialize(), fp=f, indent=4)
         self.sequence.save("output.gif")
+        self.statusBar().showMessage(f'Saved to output.gif')
 
 
 if __name__ == '__main__':

@@ -84,8 +84,9 @@ class TextAnimationKeyframeCollection(KeyframeCollection):
     def serialize(self) -> List[dict]:
         return [keyframe.serialize() for keyframe in self]
 
-    def deserialize(self, list_of_keyframes) -> 'TextAnimationKeyframeCollection':
-        collection = TextAnimationKeyframeCollection()
+    @classmethod
+    def deserialize(cls, list_of_keyframes) -> 'TextAnimationKeyframeCollection':
+        collection = cls()
         for keyframe_dict in list_of_keyframes:
             collection.insert_keyframe(TextAnimationKeyframe.deserialize(keyframe_dict))
         return collection
