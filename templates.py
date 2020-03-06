@@ -101,6 +101,9 @@ class MemeAnimationTemplate:
     def add_template(self, template: TextAnimationTemplate):
         self.templates_dict[template.id] = template
 
+    def remove_template(self, template: TextAnimationTemplate):
+        del self.templates_dict[template.id]
+
     @property
     def templates_list(self) -> List[TextAnimationTemplate]:
         return list(self.templates_dict.values())

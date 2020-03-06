@@ -7,11 +7,11 @@ from typing import Tuple, Union, List, Optional
 import numpy as np
 import qimage2ndarray
 from PIL import ImageFont
-from PyQt5 import QtCore
+from PyQt5 import QtCore, QtGui
 from PyQt5.QtCore import Qt, pyqtSignal as Signal
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QSlider, QVBoxLayout, QWidget, QPushButton, QGridLayout, \
-    QGroupBox, QRadioButton, QFormLayout, QLineEdit, QHBoxLayout, QFileDialog, QAction
+    QGroupBox, QFormLayout, QLineEdit, QHBoxLayout, QFileDialog, QAction, QComboBox
 
 from gif import GifSequence
 from keyframes import TextAnimationKeyframe
@@ -52,17 +52,17 @@ class TemplateSelectionPanel(QWidget):
         vbox = QVBoxLayout()
         groupbox.setLayout(vbox)
 
-        self.radio_buttons: List[QRadioButton] = []
-        for template in meme_template.templates_list:
-            radio_button = QRadioButton(template.id)
-            radio_button.toggled.connect(partial(self.on_radio_button_change, radio_button.text()))
-            vbox.addWidget(radio_button)
-            self.radio_buttons.append(radio_button)
-        self.radio_buttons[0].setChecked(True)
+        self.combo = QComboBox(self)
+        self.refresh_selector(meme_template=meme_template)
+        self.combo.activated[str].connect(self.on_combo_change)
+        vbox.addWidget(self.combo)
 
-    def on_radio_button_change(self, template_id, is_activated):
-        if is_activated:
-            self.selected_template_changed.emit(template_id)
+    def on_combo_change(self, template_id: str):
+        self.selected_template_changed.emit(template_id)
+
+    def refresh_selector(self, meme_template: MemeAnimationTemplate):
+        self.combo.clear()
+        self.combo.addItems([template.id for template in meme_template.templates_list])
 
 
 class FramePropertiesPanel(QWidget):
@@ -184,8 +184,7 @@ class MainWindow(QMainWindow):
 
         self.meme_template = meme_template
         self.selected_text_template = meme_template.templates_list[0]
-        self.render_options = {key: value for key, value in
-                               zip(self.meme_template.templates_dict.keys(), "Lorem Ipsum Dolor mit emet".split())}
+        self.render_options = {key: key for key in self.meme_template.templates_dict.keys()}
         self.current_frame_index = 0
 
         self.frame_properties_panel = FramePropertiesPanel(meme_template, parent=self)
@@ -200,13 +199,18 @@ class MainWindow(QMainWindow):
 
         self.image_view = PictureLabel(self.sequence[self.frames_slider.value()].array)
         self.image_view.pictureClicked.connect(self.handle_image_press)
+        self.image_view.setCursor(QtGui.QCursor(Qt.CrossCursor))
 
         self.render_sequence()
 
         left_side_widget = QWidget()
         left_layout = QVBoxLayout()
-        self.save_button = QPushButton('Save', self)
-        self.save_button.clicked.connect(self.on_click_save)
+        self.add_text_template_button = QPushButton('Add New Text Template', self)
+        self.add_text_template_button.clicked.connect(self.on_click_add_text_template)
+
+        self.delete_current_text_template = QPushButton('Delete Current Text Template', self)
+        self.delete_current_text_template.clicked.connect(self.on_click_delete_current_text_template)
+
         self.reset_button = QPushButton('Reset', self)
         self.reset_button.clicked.connect(self.on_click_reset)
         self.reset_button.clicked.connect(lambda _: self.frame_properties_panel.on_selected_frame_change())
@@ -241,9 +245,10 @@ class MainWindow(QMainWindow):
 
         left_layout.addWidget(self.image_view)
         left_layout.addWidget(self.frames_slider)
-        left_layout.addWidget(self.save_button)
-        left_layout.addWidget(self.reset_button)
         left_layout.addWidget(self.template_selection_panel)
+        left_layout.addWidget(self.add_text_template_button)
+        left_layout.addWidget(self.delete_current_text_template)
+        left_layout.addWidget(self.reset_button)
         left_side_widget.setLayout(left_layout)
 
         right_side_widget = QWidget()
@@ -258,6 +263,24 @@ class MainWindow(QMainWindow):
         main_widget.setLayout(main_layout)
 
         self.setCentralWidget(main_widget)
+
+    def on_click_delete_current_text_template(self):
+        if len(self.meme_template.templates_list) > 1:
+            template_id = self.selected_text_template.id
+            self.meme_template.remove_template(self.selected_text_template)
+            self.template_selection_panel.refresh_selector(self.meme_template)
+            self.on_text_template_change(self.meme_template.templates_list[0].id)
+            del self.render_options[template_id]
+            self.render_sequence()
+
+    def on_click_add_text_template(self):
+        initial_template_id = f"Text {1 + len(self.meme_template.templates_list)}"
+        self.meme_template.add_template(TextAnimationTemplate(template_id=initial_template_id))
+        self.template_selection_panel.refresh_selector(self.meme_template)
+        self.render_options[initial_template_id] = initial_template_id
+        self.template_selection_panel.combo.setCurrentIndex(len(self.meme_template.templates_list) - 1)
+        self.on_text_template_change(self.template_selection_panel.combo.currentText())
+        self.render_sequence()
 
     def on_text_template_change(self, template_id: str):
         self.selected_text_template = self.meme_template[template_id]
@@ -363,7 +386,7 @@ if __name__ == '__main__':
 
     text_template = TextAnimationTemplate("Text 1")
     text_template2 = TextAnimationTemplate("Text 2")
-    meme_template = MemeAnimationTemplate(text_templates=[text_template, text_template2])
+    meme_template = MemeAnimationTemplate(text_templates=[text_template])
     window = MainWindow("trump.gif", meme_template=meme_template)
     window.show()
 
