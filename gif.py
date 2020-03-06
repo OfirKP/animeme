@@ -13,7 +13,7 @@ from moviepy.video.io.VideoFileClip import VideoFileClip
 
 
 class GifSequence:
-    def __init__(self, images: Iterable[Image.Image], is_loop: bool = False):
+    def __init__(self, images: Iterable[Image.Image]):
         list_of_frames = []
         list_of_durations = []
 
@@ -21,7 +21,6 @@ class GifSequence:
             list_of_frames.append(np.array(image.convert('RGB')))
             list_of_durations.append(image.info['duration'])
 
-        self.is_loop: bool = is_loop
         self._frames_array: np.ndarray = np.array(list_of_frames)
         self._durations_array: np.ndarray = np.array(list_of_durations)
 
@@ -29,36 +28,35 @@ class GifSequence:
         return copy.deepcopy(self)
 
     @classmethod
-    def open(cls, path: Union[str, Path], is_loop: bool = False, method: str = "pillow"):
+    def open(cls, path: Union[str, Path], method: str = "pillow"):
         image_file = Image.open(path)
         assert type(image_file) is GifImagePlugin.GifImageFile
 
         if method == "pillow":
-            return cls(ImageSequence.Iterator(image_file), is_loop=is_loop)
+            return cls(ImageSequence.Iterator(image_file))
         elif method == "mpy":
             durations = [image.info['duration'] for image in ImageSequence.Iterator(image_file)]
             clip = VideoFileClip(path)
             frames = []
             for frame, duration in zip(clip.iter_frames(), durations):
                 frames.append(GifFrame.from_array(array=frame, duration=duration))
-            return GifSequence.from_frames(frames, is_loop=is_loop)
+            return GifSequence.from_frames(frames)
         else:
             raise ValueError("Method must be either pillow or mpy (moviepy)")
 
     @classmethod
-    def from_frames(cls, frames: Iterable['GifFrame'], is_loop: bool = False):
+    def from_frames(cls, frames: Iterable['GifFrame']):
         frames_array = np.stack([frame.array for frame in frames], axis=0)
         durations_array = np.array([frame.duration for frame in frames])
 
         sequence = cls.__new__(cls)
         sequence._frames_array = frames_array
         sequence._durations_array = durations_array
-        sequence.is_loop = is_loop
         return sequence
 
-    def show(self):
+    def show(self, is_loop: bool = False):
         frames_iterator = zip(self._frames_array, self._durations_array)
-        if self.is_loop:
+        if is_loop:
             frames_iterator = itertools.cycle(frames_iterator)
 
         for frame, duration in frames_iterator:
@@ -67,10 +65,10 @@ class GifSequence:
                 break
         cv2.destroyAllWindows()
 
-    def save(self, path: Union[Path, str]):
+    def save(self, path: Union[Path, str], is_loop: bool = False):
         images = list(self._frames_array)
         durations_in_seconds = list(self._durations_array / 1000)
-        imageio.mimsave(path, images, duration=durations_in_seconds, loop=int(not self.is_loop))
+        imageio.mimsave(path, images, duration=durations_in_seconds, loop=int(not is_loop))
 
         # MPY
         # clip = ImageSequenceClip(list(self._frames_array), durations=list(self._durations_array / 1000))
@@ -78,7 +76,7 @@ class GifSequence:
 
         # PIL
         # images[0].save(path, save_all=True, append_images=images[1:], optimize=False,
-        #                duration=list(self._durations_array), loop=int(not self.is_loop))
+        #                duration=list(self._durations_array), loop=int(not is_loop))
 
     def __add__(self, other: Union['GifSequence', 'GifFrame']) -> 'GifSequence':
         if isinstance(other, GifSequence):
@@ -95,8 +93,7 @@ class GifSequence:
     def __getitem__(self, item: Union[slice, int]) -> Union['GifSequence', 'GifFrame']:
         if isinstance(item, slice):
             indices = range(*item.indices(len(self)))
-            return GifSequence.from_frames([self.__getitem__(index) for index in indices],
-                                           is_loop=self.is_loop)
+            return GifSequence.from_frames([self.__getitem__(index) for index in indices])
         elif isinstance(item, int):
             return GifFrame.from_array(array=self._frames_array[item],
                                        duration=self._durations_array[item])
@@ -162,11 +159,10 @@ class GifFrame:
 
 
 if __name__ == '__main__':
-    seq = GifSequence.open('tenor.gif', is_loop=True)
+    seq = GifSequence.open('tenor.gif')
     seq.show()
     seq.save('tenor_output.gif')
     seq_short = 10 * seq[0] + seq[-1] * 20 + seq[2] * 10
-    seq_short.is_loop = True
     print(len(seq_short))
     seq_short.show()
     seq_short.save('modified_output.gif')

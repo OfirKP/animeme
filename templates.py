@@ -33,7 +33,7 @@ class TextAnimationTemplate(AnimationTemplate):
         rendered_frames = []
         for frame_ind, frame in enumerate(sequence):
             rendered_frames.append(self.render_frame(sequence=sequence, frame_ind=frame_ind, content=content))
-        return GifSequence.from_frames(rendered_frames, is_loop=sequence.is_loop)
+        return GifSequence.from_frames(rendered_frames)
 
     def render_frame(self, sequence: GifSequence, frame_ind: int, content: str, inplace: bool = False) -> GifFrame:
         current_state: TextAnimationKeyframe = self.keyframes.interpolate(frame_ind=frame_ind)
@@ -53,6 +53,7 @@ class TextAnimationTemplate(AnimationTemplate):
     def deserialize(cls, serialized_dict: dict):
         template = TextAnimationTemplate(template_id=serialized_dict['id'])
         template.keyframes = template.keyframes.deserialize(serialized_dict['keyframes'])
+        return template
 
     @staticmethod
     def _draw_outlined_text(image: Image,
@@ -141,6 +142,11 @@ class MemeAnimationTemplate:
     def serialize(self) -> List[dict]:
         return [template.serialize() for template in self.templates_list]
 
+    @classmethod
+    def deserialize(cls, serialized_meme_template) -> 'MemeAnimationTemplate':
+        return cls(text_templates=[TextAnimationTemplate.deserialize(serialized_text_template)
+                                   for serialized_text_template in serialized_meme_template])
+
     def __getitem__(self, template_id: str) -> TextAnimationTemplate:
         return self.templates_dict[template_id]
 
@@ -155,7 +161,7 @@ if __name__ == '__main__':
     # template.keyframes.insert_keyframe(keyframe2)
     # template.keyframes.insert_keyframe(keyframe3)
 
-    gif = GifSequence.open('tenor.gif', is_loop=True)
+    gif = GifSequence.open('tenor.gif')
     print(len(gif))
     rendered = template.render(gif, "Hello World!")
     rendered.show()

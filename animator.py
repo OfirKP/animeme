@@ -213,10 +213,10 @@ class MainWindow(QMainWindow):
 
         loadAction = QAction("&Load animation", self)
         loadAction.setShortcut("Ctrl+O")
-        loadAction.setStatusTip('Load animation and existing animation data if possible')
+        loadAction.setStatusTip('Load animation and existing template data if possible')
         loadAction.triggered.connect(self.on_click_load)
 
-        saveAction = QAction("&Save animation data", self)
+        saveAction = QAction("&Save template as", self)
         saveAction.setShortcut("Ctrl+S")
         saveAction.setStatusTip('Save animation data to a JSON file')
         saveAction.triggered.connect(self.on_click_save)
@@ -273,6 +273,12 @@ class MainWindow(QMainWindow):
         self.render_sequence()
         self.frames_slider.setMaximum(len(self.sequence) - 1)
 
+    def load_animation_data(self, serialized_meme_template: List):
+        self.meme_template = MemeAnimationTemplate.deserialize(serialized_meme_template=serialized_meme_template)
+        self.selected_text_template = self.meme_template.templates_list[0]
+        self.render_sequence()
+        self.frame_properties_panel.on_selected_frame_change()
+
     @QtCore.pyqtSlot(int)
     def on_change_frame(self, index: int):
         self.current_frame_index = index
@@ -303,13 +309,14 @@ class MainWindow(QMainWindow):
 
     @QtCore.pyqtSlot()
     def on_click_save(self):
-        file_path, _ = QFileDialog.getSaveFileName(self, 'Save Animation Data as',
+        file_path, _ = QFileDialog.getSaveFileName(self, 'Save Template as',
                                                         'c:\\', "JSON file (*.json)")
-        if os.path.isfile(file_path):
+        if file_path:
             with open(file_path, mode='w') as f:
                 json.dump(self.meme_template.serialize(), fp=f, indent=4)
-            self.sequence.save(Path(file_path).with_suffix(".gif"))
-            self.statusBar().showMessage(f'Saved animation data to {file_path}')
+            gif_path = Path(file_path).with_suffix(".gif")
+            self.original_sequence.save(str(gif_path))
+            self.statusBar().showMessage(f'Saved template to {file_path} and {gif_path}')
         else:
             self.statusBar().showMessage(f'File not saved')
 
@@ -324,6 +331,10 @@ class MainWindow(QMainWindow):
             new_sequence = GifSequence.open(str(gif_path), method="mpy")
             self.load_new_sequence(new_sequence)
             self.statusBar().showMessage(f'Loaded {file_path}')
+
+            if json_path.exists():
+                serialized_meme_template = json.loads(json_path.read_bytes())
+                self.load_animation_data(serialized_meme_template)
             self.setWindowTitle(f"Animator - {gif_path.name}")
         else:
             self.statusBar().showMessage(f'File does not exists')
