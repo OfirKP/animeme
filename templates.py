@@ -39,7 +39,7 @@ class TextAnimationTemplate(AnimationTemplate):
     def render_frame(self, sequence: GifSequence, frame_ind: int, content: str, inplace: bool = False) -> GifFrame:
         current_state: TextAnimationKeyframe = self.keyframes.interpolate(frame_ind=frame_ind)
         image = sequence[frame_ind].to_image()
-        self._draw_outlined_text(image, position=current_state.position, content=content, font=self.font, width=1)
+        self._draw_outlined_text(image, position=current_state.position, content=content, font=self.font, width=0)
         new_frame = GifFrame(image)
         if inplace:
             sequence[frame_ind] = new_frame
@@ -96,6 +96,9 @@ class MemeAnimationTemplate:
         self.templates_dict: Dict[str, TextAnimationTemplate] = \
             {text_template.id: text_template for text_template in text_templates}
 
+    def add_template(self, template: TextAnimationTemplate):
+        self.templates_dict[template.id] = template
+
     @property
     def templates_list(self) -> List[TextAnimationTemplate]:
         return list(self.templates_dict.values())
@@ -108,7 +111,6 @@ class MemeAnimationTemplate:
     @staticmethod
     def spiral(start_ind: int, length: int):
         def roundrobin(*iterables):
-            "roundrobin('ABC', 'D', 'EF') --> A D E B F C"
             # Recipe credited to George Sakkis
             num_active = len(iterables)
             nexts = cycle(iter(it).__next__ for it in iterables)

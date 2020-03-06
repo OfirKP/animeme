@@ -41,6 +41,9 @@ class KeyframeCollection(ABC):
     def keyframes_indices(self):
         return [keyframe.frame_ind for keyframe in self._keyframes]
 
+    def reset(self):
+        self._keyframes = []
+
     def __getitem__(self, item) -> Keyframe:
         return self._keyframes[item]
 
