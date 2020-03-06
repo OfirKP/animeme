@@ -11,7 +11,7 @@ from PyQt5 import QtCore
 from PyQt5.QtCore import Qt, pyqtSignal as Signal
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QSlider, QVBoxLayout, QWidget, QPushButton, QGridLayout, \
-    QGroupBox, QRadioButton, QFormLayout, QLineEdit, QHBoxLayout
+    QGroupBox, QRadioButton, QFormLayout, QLineEdit, QHBoxLayout, QFileDialog, QAction
 
 from gif import GifSequence
 from keyframes import TextAnimationKeyframe
@@ -211,6 +211,21 @@ class MainWindow(QMainWindow):
         self.reset_button.clicked.connect(self.on_click_reset)
         self.reset_button.clicked.connect(lambda _: self.frame_properties_panel.on_selected_frame_change())
 
+        loadAction = QAction("&Load animation", self)
+        loadAction.setShortcut("Ctrl+O")
+        loadAction.setStatusTip('Load animation and existing animation data if possible')
+        loadAction.triggered.connect(self.on_click_load)
+
+        saveAction = QAction("&Save animation data", self)
+        saveAction.setShortcut("Ctrl+S")
+        saveAction.setStatusTip('Save animation data to a JSON file')
+        saveAction.triggered.connect(self.on_click_save)
+
+        mainMenu = self.menuBar()
+        fileMenu = mainMenu.addMenu('&File')
+        fileMenu.addAction(saveAction)
+        fileMenu.addAction(loadAction)
+
         self.template_selection_panel = TemplateSelectionPanel(self.meme_template)
         self.template_selection_panel.selected_template_changed.connect(self.on_text_template_change)
         self.template_selection_panel.selected_template_changed.connect(
@@ -252,6 +267,12 @@ class MainWindow(QMainWindow):
         self.image_view.setImage(self.sequence[self.frames_slider.value()].array)
         self.image_view.repaint()
 
+    def load_new_sequence(self, sequence: GifSequence):
+        self.original_sequence = sequence
+        self.sequence = self.original_sequence
+        self.render_sequence()
+        self.frames_slider.setMaximum(len(self.sequence) - 1)
+
     @QtCore.pyqtSlot(int)
     def on_change_frame(self, index: int):
         self.current_frame_index = index
@@ -282,15 +303,36 @@ class MainWindow(QMainWindow):
 
     @QtCore.pyqtSlot()
     def on_click_save(self):
-        with open('output.json', mode='w') as f:
-            json.dump(self.meme_template.serialize(), fp=f, indent=4)
-        self.sequence.save("output.gif")
-        self.statusBar().showMessage(f'Saved to output.gif')
+        file_path, _ = QFileDialog.getSaveFileName(self, 'Save Animation Data as',
+                                                        'c:\\', "JSON file (*.json)")
+        if os.path.isfile(file_path):
+            with open(file_path, mode='w') as f:
+                json.dump(self.meme_template.serialize(), fp=f, indent=4)
+            self.sequence.save(Path(file_path).with_suffix(".gif"))
+            self.statusBar().showMessage(f'Saved animation data to {file_path}')
+        else:
+            self.statusBar().showMessage(f'File not saved')
+
+    @QtCore.pyqtSlot()
+    def on_click_load(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, 'Load Animation',
+                                                        'c:\\', "GIF file (*.gif)")
+        if os.path.isfile(file_path):
+            gif_path = Path(file_path)
+            json_path = gif_path.with_suffix(".json")
+
+            new_sequence = GifSequence.open(str(gif_path), method="mpy")
+            self.load_new_sequence(new_sequence)
+            self.statusBar().showMessage(f'Loaded {file_path}')
+            self.setWindowTitle(f"Animator - {gif_path.name}")
+        else:
+            self.statusBar().showMessage(f'File does not exists')
 
     @QtCore.pyqtSlot()
     def on_click_reset(self):
         self.selected_text_template.keyframes.reset()
         self.render_sequence()
+
 
 if __name__ == '__main__':
     app = QApplication([])
