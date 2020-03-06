@@ -1,7 +1,8 @@
 import bisect
 import copy
 from abc import abstractmethod, ABC
-from typing import Tuple, Optional, List, Type, Union
+from typing import Tuple, Optional, List, Union
+
 import numpy as np
 
 
@@ -37,8 +38,15 @@ class KeyframeCollection(ABC):
         else:
             self._keyframes.insert(insertion_index, keyframe)
 
+    def remove_keyframe(self, frame_ind: int):
+        index = self.keyframes_frames_indices.index(frame_ind)
+        self._keyframes.pop(index)
+
+    def get_keyframe(self, frame_ind: int):
+        return self._keyframes[self.keyframes_frames_indices.index(frame_ind)]
+
     @property
-    def keyframes_indices(self):
+    def keyframes_frames_indices(self):
         return [keyframe.frame_ind for keyframe in self._keyframes]
 
     def reset(self):
@@ -98,7 +106,10 @@ class TextAnimationKeyframeCollection(KeyframeCollection):
 class TextAnimationKeyframe(Keyframe):
     def __init__(self, frame_ind: int, position: Optional[Tuple[int, int]] = None, text_size=None):
         super().__init__(frame_ind)
-        self.x, self.y = position
+        if position is not None:
+            self.x, self.y = position
+        else:
+            self.x = self.y = None
         self.text_size = text_size
 
     def update_keyframe(self, new_keyframe: 'TextAnimationKeyframe'):
@@ -124,6 +135,11 @@ class TextAnimationKeyframe(Keyframe):
                    position=serialized_dict['position'],
                    text_size=serialized_dict['text_size'])
 
+    def __eq__(self, other: 'TextAnimationKeyframe'):
+        return self.frame_ind == other.frame_ind and \
+               self.position == other.position and \
+               self.text_size == other.text_size
+
     def __repr__(self):
         return f'{self.__class__.__name__}' \
                f'(frame_ind={self.frame_ind}, ' \
@@ -134,7 +150,7 @@ class TextAnimationKeyframe(Keyframe):
 if __name__ == '__main__':
     def show_keyframes_timeline(collection: TextAnimationKeyframeCollection, length=50):
         timeline = ""
-        keyframes_indices = collection.keyframes_indices
+        keyframes_indices = collection.keyframes_frames_indices
         for frame_ind in range(length):
             if frame_ind in keyframes_indices:
                 timeline += "◆"

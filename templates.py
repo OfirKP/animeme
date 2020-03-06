@@ -1,9 +1,8 @@
 from abc import ABC, abstractmethod
 from itertools import cycle, islice
 from typing import Tuple, Optional, List, Dict, Callable
-from PIL import Image, ImageDraw, ImageFont
 
-import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 
 from gif import GifSequence, GifFrame
 from keyframes import TextAnimationKeyframeCollection, TextAnimationKeyframe
@@ -33,13 +32,15 @@ class TextAnimationTemplate(AnimationTemplate):
     def render(self, sequence: GifSequence, content: str):
         rendered_frames = []
         for frame_ind, frame in enumerate(sequence):
-            rendered_frames.append(self.render_frame(frame=frame, frame_ind=frame_ind, content=content))
+            rendered_frames.append(self.render_frame(sequence=sequence, frame_ind=frame_ind, content=content))
         return GifSequence.from_frames(rendered_frames, is_loop=sequence.is_loop)
 
     def render_frame(self, sequence: GifSequence, frame_ind: int, content: str, inplace: bool = False) -> GifFrame:
         current_state: TextAnimationKeyframe = self.keyframes.interpolate(frame_ind=frame_ind)
         image = sequence[frame_ind].to_image()
-        self._draw_outlined_text(image, position=current_state.position, content=content, font=self.font, width=0)
+        self._draw_outlined_text(image, position=current_state.position, content=content,
+                                 font=ImageFont.truetype('Montserrat-Regular.ttf', size=current_state.text_size),
+                                 width=0)
         new_frame = GifFrame(image)
         if inplace:
             sequence[frame_ind] = new_frame

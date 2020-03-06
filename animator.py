@@ -1,17 +1,17 @@
 import json
-import sys
 import os
-from functools import lru_cache, partial
+from functools import partial
 from pathlib import Path
-from typing import Tuple, Union, List
+from typing import Tuple, Union, List, Optional
 
+import numpy as np
+import qimage2ndarray
+from PIL import ImageFont
 from PyQt5 import QtCore
+from PyQt5.QtCore import Qt, pyqtSignal as Signal
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QSlider, QVBoxLayout, QWidget, QPushButton, QGridLayout, \
-    QGroupBox, QRadioButton
-from PyQt5.QtCore import Qt, pyqtSignal as Signal
-import qimage2ndarray
-import numpy as np
+    QGroupBox, QRadioButton, QFormLayout, QLineEdit, QHBoxLayout
 
 from gif import GifSequence
 from keyframes import TextAnimationKeyframe
@@ -19,7 +19,6 @@ from templates import TextAnimationTemplate, MemeAnimationTemplate
 
 
 class PictureLabel(QLabel):
-
     pictureClicked = Signal(tuple)  # can be other types (list, dict, object...)
 
     def __init__(self, image: np.ndarray, parent=None):
@@ -66,8 +65,116 @@ class TemplateSelectionPanel(QWidget):
             self.selected_template_changed.emit(template_id)
 
 
-class MainWindow(QMainWindow):
+class FramePropertiesPanel(QWidget):
+    def __init__(self, meme_template: MemeAnimationTemplate, parent=None):
+        QWidget.__init__(self, parent=parent)
 
+        self.is_enabled = False
+        self.parent_widget: MainWindow = parent
+        self.meme_template = meme_template
+        self.keyframe: Optional[TextAnimationKeyframe] = None
+        layout = QGridLayout()
+        self.setLayout(layout)
+
+        groupBox = QGroupBox("Frame Properties")
+        layout.addWidget(groupBox)
+
+        self.toggleKeyframeButton = QPushButton('Add Keyframe')
+        self.toggleKeyframeButton.setCheckable(True)
+        self.toggleKeyframeButton.clicked.connect(self.on_toggle_keyframe)
+
+        self.frameEdit = QLineEdit()
+        self.xEdit = QLineEdit()
+        self.yEdit = QLineEdit()
+        self.textSizeEdit = QLineEdit()
+
+        self.frameEdit.editingFinished.connect(self.on_editing_finished)
+        self.xEdit.editingFinished.connect(self.on_editing_finished)
+        self.yEdit.editingFinished.connect(self.on_editing_finished)
+        self.textSizeEdit.editingFinished.connect(self.on_editing_finished)
+
+        layout = QFormLayout()
+        layout.addRow(self.toggleKeyframeButton)
+        layout.addRow(QLabel("Frame:"), self.frameEdit)
+        layout.addRow(QLabel("x:"), self.xEdit)
+        layout.addRow(QLabel("y:"), self.yEdit)
+        layout.addRow(QLabel("Text Size:"), self.textSizeEdit)
+        groupBox.setLayout(layout)
+
+    def on_editing_finished(self):
+        if self.is_enabled:
+            frame_ind_str = self.frameEdit.text()
+            x_str = self.xEdit.text()
+            y_str = self.yEdit.text()
+            text_size_str = self.textSizeEdit.text()
+
+            try:
+                new_position = (int(x_str), int(y_str)) if x_str and y_str else None
+                new_keyframe = TextAnimationKeyframe(frame_ind=int(frame_ind_str) if frame_ind_str else None,
+                                                     position=new_position,
+                                                     text_size=int(text_size_str) if text_size_str else None)
+
+                # TODO: handle frame index changing
+                current_keyframe = self.parent_widget.selected_text_template.keyframes.get_keyframe(
+                    self.parent_widget.current_frame_index
+                )
+
+                if current_keyframe != new_keyframe:
+                    self.parent_widget.selected_text_template.keyframes.insert_keyframe(new_keyframe)
+                    self.parent_widget.render_sequence()
+            except ValueError:
+                self.parent_widget.statusBar().showMessage("Invalid values for keyframe. Please try again.")
+
+    @QtCore.pyqtSlot(bool)
+    def on_toggle_keyframe(self, is_add: bool):
+        keyframes_collection = self.parent_widget.selected_text_template.keyframes
+        frame_ind = int(self.frameEdit.text())
+        if is_add:
+            keyframes_collection.insert_keyframe(keyframes_collection.interpolate(frame_ind))
+        else:
+            keyframes_collection.remove_keyframe(frame_ind)
+        self.on_selected_frame_change()
+        self.parent_widget.render_sequence()
+
+    @QtCore.pyqtSlot(int)
+    def on_selected_frame_change(self):
+        frame_num = self.parent_widget.current_frame_index
+        keyframes_collection = self.parent_widget.selected_text_template.keyframes
+        if frame_num in keyframes_collection.keyframes_frames_indices:
+            keyframe = keyframes_collection.get_keyframe(frame_num)
+            self.updateForm(frame_ind=frame_num, x=keyframe.x, y=keyframe.y, text_size=keyframe.text_size)
+            self.toggleKeyframeButton.setChecked(True)
+            self.toggleKeyframeButton.setText("Remove Keyframe")
+            self.enable()
+        else:
+            self.disable()
+            keyframe = keyframes_collection.interpolate(frame_ind=frame_num)
+            self.updateForm(frame_ind=frame_num, x=keyframe.x, y=keyframe.y, text_size=keyframe.text_size)
+            self.toggleKeyframeButton.setChecked(False)
+            self.toggleKeyframeButton.setText("Add Keyframe")
+
+    def disable(self):
+        self.is_enabled = False
+        self.frameEdit.setDisabled(True)
+        self.xEdit.setDisabled(True)
+        self.yEdit.setDisabled(True)
+        self.textSizeEdit.setDisabled(True)
+
+    def enable(self):
+        self.frameEdit.setEnabled(True)
+        self.xEdit.setEnabled(True)
+        self.yEdit.setEnabled(True)
+        self.textSizeEdit.setEnabled(True)
+        self.is_enabled = True
+
+    def updateForm(self, frame_ind: int, x: int, y: int, text_size: int):
+        self.frameEdit.setText(str(frame_ind) if frame_ind is not None else "")
+        self.xEdit.setText(str(x) if x is not None else "")
+        self.yEdit.setText(str(y) if y is not None else "")
+        self.textSizeEdit.setText(str(text_size) if text_size is not None else "")
+
+
+class MainWindow(QMainWindow):
     def __init__(self, path_to_gif: Union[Path, str], meme_template: MemeAnimationTemplate, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
 
@@ -79,37 +186,56 @@ class MainWindow(QMainWindow):
         self.selected_text_template = meme_template.templates_list[0]
         self.render_options = {key: value for key, value in
                                zip(self.meme_template.templates_dict.keys(), "Lorem Ipsum Dolor mit emet".split())}
-
         self.current_frame_index = 0
+
+        self.frame_properties_panel = FramePropertiesPanel(meme_template, parent=self)
+        self.frame_properties_panel.on_selected_frame_change()
+
         self.frames_slider = QSlider(Qt.Horizontal, self)
         self.frames_slider.setMinimum(0)
         self.frames_slider.setMaximum(len(self.sequence) - 1)
         self.frames_slider.setTickPosition(QSlider.TicksBelow)
-
         self.frames_slider.valueChanged[int].connect(self.on_change_frame)
+        self.frames_slider.valueChanged[int].connect(self.frame_properties_panel.on_selected_frame_change)
+
         self.image_view = PictureLabel(self.sequence[self.frames_slider.value()].array)
         self.image_view.pictureClicked.connect(self.handle_image_press)
 
         self.render_sequence()
-        self.refresh_frame()
 
-        widget = QWidget()
-        layout = QVBoxLayout()
+        left_side_widget = QWidget()
+        left_layout = QVBoxLayout()
         self.save_button = QPushButton('Save', self)
         self.save_button.clicked.connect(self.on_click_save)
         self.reset_button = QPushButton('Reset', self)
         self.reset_button.clicked.connect(self.on_click_reset)
+        self.reset_button.clicked.connect(lambda _: self.frame_properties_panel.on_selected_frame_change())
 
         self.template_selection_panel = TemplateSelectionPanel(self.meme_template)
         self.template_selection_panel.selected_template_changed.connect(self.on_text_template_change)
+        self.template_selection_panel.selected_template_changed.connect(
+            lambda _: self.frame_properties_panel.on_selected_frame_change()
+        )
 
-        layout.addWidget(self.image_view)
-        layout.addWidget(self.frames_slider)
-        layout.addWidget(self.save_button)
-        layout.addWidget(self.reset_button)
-        layout.addWidget(self.template_selection_panel)
-        widget.setLayout(layout)
-        self.setCentralWidget(widget)
+        left_layout.addWidget(self.image_view)
+        left_layout.addWidget(self.frames_slider)
+        left_layout.addWidget(self.save_button)
+        left_layout.addWidget(self.reset_button)
+        left_layout.addWidget(self.template_selection_panel)
+        left_side_widget.setLayout(left_layout)
+
+        right_side_widget = QWidget()
+        right_layout = QVBoxLayout()
+        right_layout.addWidget(self.frame_properties_panel)
+        right_side_widget.setLayout(right_layout)
+
+        main_widget = QWidget()
+        main_layout = QHBoxLayout()
+        main_layout.addWidget(left_side_widget)
+        main_layout.addWidget(right_side_widget)
+        main_widget.setLayout(main_layout)
+
+        self.setCentralWidget(main_widget)
 
     def on_text_template_change(self, template_id: str):
         self.selected_text_template = self.meme_template[template_id]
@@ -131,14 +257,19 @@ class MainWindow(QMainWindow):
         self.current_frame_index = index
         self.refresh_frame()
 
-    @lru_cache(maxsize=8)
-    def get_text_size(self, text):
-        return self.selected_text_template.font.getsize(text)
+    # @lru_cache(maxsize=8)
+    def get_text_size(self, font: ImageFont.ImageFont, text: str):
+        return font.getsize(text)
 
     @QtCore.pyqtSlot(tuple)
     def handle_image_press(self, position: Tuple[int, int]):
         center_x, center_y = position
-        text_width, text_height = self.get_text_size(self.render_options[self.selected_text_template.id])
+        text_width, text_height = self.get_text_size(
+            font=ImageFont.truetype('Montserrat-Regular.ttf',
+                                    size=self.selected_text_template.keyframes.interpolate(self.current_frame_index)
+                                                                              .text_size),
+                                    text=self.render_options[self.selected_text_template.id]
+        )
 
         top_left_x = center_x - text_width // 2
         top_left_y = center_y - text_height // 2
@@ -146,6 +277,7 @@ class MainWindow(QMainWindow):
         self.selected_text_template.keyframes.insert_keyframe(
             TextAnimationKeyframe(frame_ind=self.current_frame_index, position=(top_left_x, top_left_y))
         )
+        self.frame_properties_panel.on_selected_frame_change()
         self.render_sequence()
 
     @QtCore.pyqtSlot()
