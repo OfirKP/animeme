@@ -25,6 +25,9 @@ class GifSequence:
         self._frames_array: np.ndarray = np.array(list_of_frames)
         self._durations_array: np.ndarray = np.array(list_of_durations)
 
+    def copy(self):
+        return copy.deepcopy(self)
+
     @classmethod
     def open(cls, path: Union[str, Path], is_loop: bool = False, method: str = "pillow"):
         image_file = Image.open(path)
@@ -99,6 +102,11 @@ class GifSequence:
                                        duration=self._durations_array[item])
         else:
             raise TypeError(f"Expected int or slice, but got {type(item)}")
+
+    def __setitem__(self, key: int, frame: 'GifFrame'):
+        assert isinstance(key, int)
+        self._frames_array[key] = frame.array
+        self._durations_array[key] = frame.duration
 
     def __len__(self) -> int:
         return len(self._frames_array)

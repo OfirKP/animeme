@@ -1,17 +1,15 @@
 import json
 import sys
 import os
+from functools import lru_cache
 from pathlib import Path
 from typing import Tuple, Union
 
-from PIL import Image
-from PIL.ImageQt import ImageQt
 from PyQt5.QtGui import QPixmap
-from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QSlider, QVBoxLayout, QWidget, QPushButton
+from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QSlider, QVBoxLayout, QWidget, QPushButton, QGridLayout
 from PyQt5.QtCore import Qt, pyqtSignal as Signal
 import qimage2ndarray
 import numpy as np
-from cv2 import cv2
 
 from gif import GifSequence
 from keyframes import TextAnimationKeyframe
@@ -50,10 +48,8 @@ class MainWindow(QMainWindow):
 
         self.meme_template = meme_template
         self.selected_text_template = meme_template.templates_list[0]
-        self.render_options = {
-            "Text 1": "Hello",
-            "Text 2": "World!"
-        }
+        self.render_options = {key: value for key, value in
+                               zip(self.meme_template.templates_dict.keys(), "Lorem Ipsum Dolor mit emet".split())}
 
         self.current_frame_index = 0
         self.frames_slider = QSlider(Qt.Horizontal, self)
@@ -80,20 +76,29 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(widget)
 
     def render_sequence(self):
-        self.sequence = self.meme_template.render(self.original_sequence, self.render_options)
+        self.sequence = self.original_sequence.copy()
+        self.meme_template.render_spiral(sequence=self.sequence,
+                                         render_options=self.render_options,
+                                         current_ind=self.current_frame_index,
+                                         refresh_callback=self.refresh_frame)
+        self.refresh_frame()
 
     def refresh_frame(self):
         self.image_view.setImage(self.sequence[self.frames_slider.value()].array)
+        self.image_view.repaint()
 
     def on_change_frame(self, index: int):
         self.current_frame_index = index
         self.refresh_frame()
 
+    @lru_cache(maxsize=8)
+    def get_text_size(self, text):
+        return self.selected_text_template.font.getsize(text)
+
     def handle_image_press(self, position: Tuple[int, int]):
         center_x, center_y = position
-        text_width, text_height = self.selected_text_template.font.getsize(
-            self.render_options[self.selected_text_template.id]
-        )
+        text_width, text_height = self.get_text_size(self.render_options[self.selected_text_template.id])
+
         top_left_x = center_x - text_width // 2
         top_left_y = center_y - text_height // 2
 
@@ -101,11 +106,10 @@ class MainWindow(QMainWindow):
             TextAnimationKeyframe(frame_ind=self.current_frame_index, position=(top_left_x, top_left_y))
         )
         self.render_sequence()
-        self.refresh_frame()
 
     def on_click_save(self):
         with open('output.json', mode='w') as f:
-            json.dump(self.text_template.keyframes.serialize(), fp=f, indent=4)
+            json.dump(self.meme_template.serialize(), fp=f, indent=4)
         self.sequence.save("output.gif")
         self.statusBar().showMessage(f'Saved to output.gif')
 
