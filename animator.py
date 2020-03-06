@@ -221,10 +221,17 @@ class MainWindow(QMainWindow):
         saveAction.setStatusTip('Save animation data to a JSON file')
         saveAction.triggered.connect(self.on_click_save)
 
+        resetAllAction = QAction("&Reset all animation data", self)
+        resetAllAction.setShortcut("Ctrl+R")
+        resetAllAction.setStatusTip('Reset animation data in all text templates')
+        resetAllAction.triggered.connect(self.on_click_reset_all)
+
         mainMenu = self.menuBar()
         fileMenu = mainMenu.addMenu('&File')
         fileMenu.addAction(saveAction)
         fileMenu.addAction(loadAction)
+        fileMenu = mainMenu.addMenu('&Animation')
+        fileMenu.addAction(resetAllAction)
 
         self.template_selection_panel = TemplateSelectionPanel(self.meme_template)
         self.template_selection_panel.selected_template_changed.connect(self.on_text_template_change)
@@ -342,6 +349,12 @@ class MainWindow(QMainWindow):
     @QtCore.pyqtSlot()
     def on_click_reset(self):
         self.selected_text_template.keyframes.reset()
+        self.render_sequence()
+
+    @QtCore.pyqtSlot()
+    def on_click_reset_all(self):
+        for text_template in self.meme_template.templates_list:
+            text_template.keyframes.reset()
         self.render_sequence()
 
 
