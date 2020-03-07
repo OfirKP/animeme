@@ -314,25 +314,10 @@ class MainWindow(QMainWindow):
         self.current_frame_index = index
         self.refresh_frame()
 
-    # @lru_cache(maxsize=8)
-    def get_text_size(self, font: ImageFont.ImageFont, text: str):
-        return font.getsize(text)
-
     @QtCore.pyqtSlot(tuple)
     def handle_image_press(self, position: Tuple[int, int]):
-        center_x, center_y = position
-        text_width, text_height = self.get_text_size(
-            font=ImageFont.truetype('Montserrat-Regular.ttf',
-                                    size=self.selected_text_template.keyframes.interpolate(self.current_frame_index)
-                                                                              .text_size),
-                                    text=self.render_options[self.selected_text_template.id]
-        )
-
-        top_left_x = center_x - text_width // 2
-        top_left_y = center_y - text_height // 2
-
         self.selected_text_template.keyframes.insert_keyframe(
-            TextAnimationKeyframe(frame_ind=self.current_frame_index, position=(top_left_x, top_left_y))
+            TextAnimationKeyframe(frame_ind=self.current_frame_index, position=position)
         )
         self.frame_properties_panel.on_selected_frame_change()
         self.render_sequence()

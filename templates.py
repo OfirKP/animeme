@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from functools import lru_cache
 from itertools import cycle, islice
 from typing import Tuple, Optional, List, Dict, Callable
 
@@ -27,7 +28,7 @@ class TextAnimationTemplate(AnimationTemplate):
             self.keyframes.insert_keyframe(TextAnimationKeyframe(frame_ind=0,
                                                                  position=initial_position,
                                                                  text_size=initial_text_size))
-        self.font = ImageFont.truetype('Montserrat-Regular.ttf', size=TextAnimationKeyframeCollection.DEFAULT_TEXT_SIZE)
+        self.font_path = 'Montserrat-Regular.ttf'
 
     def render(self, sequence: GifSequence, content: str):
         rendered_frames = []
@@ -39,8 +40,8 @@ class TextAnimationTemplate(AnimationTemplate):
         current_state: TextAnimationKeyframe = self.keyframes.interpolate(frame_ind=frame_ind)
         image = sequence[frame_ind].to_image()
         self._draw_outlined_text(image, position=current_state.position, content=content,
-                                 font=ImageFont.truetype('Montserrat-Regular.ttf', size=current_state.text_size),
-                                 width=0)
+                                 font=ImageFont.truetype(self.font_path, size=current_state.text_size),
+                                 width=1)
         new_frame = GifFrame(image)
         if inplace:
             sequence[frame_ind] = new_frame
@@ -55,8 +56,13 @@ class TextAnimationTemplate(AnimationTemplate):
         template.keyframes = template.keyframes.deserialize(serialized_dict['keyframes'])
         return template
 
-    @staticmethod
-    def _draw_outlined_text(image: Image,
+    @lru_cache(maxsize=32)
+    def get_text_box_shape(self, font_path: ImageFont.ImageFont, text_size: int, text: str):
+        font = ImageFont.truetype(font_path, size=text_size)
+        return font.getsize(text)
+
+    def _draw_outlined_text(self,
+                            image: Image,
                             position: Tuple[int, int],
                             content: str,
                             font: ImageFont.ImageFont,
@@ -67,6 +73,8 @@ class TextAnimationTemplate(AnimationTemplate):
         white_alpha = 240
 
         overlay = Image.new('RGBA', image.size)
+        text_width, text_height = self.get_text_box_shape(font_path=self.font_path, text_size=font.size, text=content)
+        position = (position[0] - text_width // 2, position[1] - text_height // 2)
 
         draw = ImageDraw.ImageDraw(overlay, 'RGBA')
         if background_fill is not None:

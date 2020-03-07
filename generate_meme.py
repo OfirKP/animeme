@@ -21,4 +21,4 @@ json_path = Path(template_path).with_suffix(".json")
 serialized_template = json.loads(json_path.read_bytes())
 template = MemeAnimationTemplate.deserialize(serialized_template)
 
-template.render(gif, dict(zip(template.templates_dict.keys(), args.text))).save(output_path)
+template.render(gif, dict(zip(template.templates_dict.keys(), args.text))).save(output_path, is_loop=True)
