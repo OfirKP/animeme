@@ -8,10 +8,10 @@ import numpy as np
 import qimage2ndarray
 from PIL import ImageFont
 from PyQt5 import QtCore, QtGui
-from PyQt5.QtCore import Qt, pyqtSignal as Signal
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtCore import Qt, pyqtSignal as Signal, QPoint
+from PyQt5.QtGui import QPixmap, QPainter, QPen, QColor
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QSlider, QVBoxLayout, QWidget, QPushButton, QGridLayout, \
-    QGroupBox, QFormLayout, QLineEdit, QHBoxLayout, QFileDialog, QAction, QComboBox
+    QGroupBox, QFormLayout, QLineEdit, QHBoxLayout, QFileDialog, QAction, QComboBox, QSizePolicy, QStyle
 
 from gif import GifSequence
 from keyframes import TextAnimationKeyframe
@@ -174,6 +174,52 @@ class FramePropertiesPanel(QWidget):
         self.textSizeEdit.setText(str(text_size) if text_size is not None else "")
 
 
+class KeyframesIndicator(QWidget):
+    def __init__(self, parent=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.parent = parent
+        self.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.MinimumExpanding
+        )
+
+    def sizeHint(self):
+        return QtCore.QSize(20, 40)
+
+    def paintEvent(self, e):
+        painter = QPainter(self)
+
+        brush = QtGui.QBrush()
+        brush.setColor(QColor('black'))
+        brush.setStyle(Qt.SolidPattern)
+        painter.setBrush(brush)
+        rect = QtCore.QRect(0, 0, painter.device().width(), painter.device().height())
+        painter.fillRect(rect, brush)
+
+        keyframes_indices = self.parent.selected_text_template.keyframes.keyframes_frames_indices
+        slider = self.parent.frames_slider
+
+        pen = QPen()
+        pen.setWidth(5)
+        pen.setColor(QColor('red'))
+        painter.setPen(pen)
+
+        brush = QtGui.QBrush()
+        brush.setColor(QColor('red'))
+        brush.setStyle(Qt.SolidPattern)
+        painter.setBrush(brush)
+
+        for frame_ind in keyframes_indices:
+            position = QStyle.sliderPositionFromValue(slider.minimum(), slider.maximum(), frame_ind, slider.width())
+            painter.drawEllipse(position, 10, 2, 2)
+            print(position)
+
+        painter.end()
+
+    def refresh(self):
+        self.update()
+
+
 class MainWindow(QMainWindow):
     def __init__(self, path_to_gif: Union[Path, str], meme_template: MemeAnimationTemplate, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
@@ -187,8 +233,10 @@ class MainWindow(QMainWindow):
         self.render_options = {key: key for key in self.meme_template.templates_dict.keys()}
         self.current_frame_index = 0
 
+        # self.keyframes_indicator = KeyframesIndicator(self)
         self.frame_properties_panel = FramePropertiesPanel(meme_template, parent=self)
         self.frame_properties_panel.on_selected_frame_change()
+        # self.frame_properties_panel.toggleKeyframeButton.clicked.connect(self.keyframes_indicator.refresh)
 
         self.frames_slider = QSlider(Qt.Horizontal, self)
         self.frames_slider.setMinimum(0)

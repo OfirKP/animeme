@@ -57,7 +57,7 @@ class TextAnimationTemplate(AnimationTemplate):
         return template
 
     @lru_cache(maxsize=32)
-    def get_text_box_shape(self, font_path: ImageFont.ImageFont, text_size: int, text: str):
+    def get_text_box_shape(self, font_path: str, text_size: int, text: str):
         font = ImageFont.truetype(font_path, size=text_size)
         return font.getsize(text)
 
