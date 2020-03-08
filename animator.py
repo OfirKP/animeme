@@ -8,10 +8,10 @@ import numpy as np
 import qimage2ndarray
 from PIL import ImageFont
 from PyQt5 import QtCore, QtGui
-from PyQt5.QtCore import Qt, pyqtSignal as Signal, QPoint
-from PyQt5.QtGui import QPixmap, QPainter, QPen, QColor
+from PyQt5.QtCore import Qt, pyqtSignal as Signal, QPoint, QRect
+from PyQt5.QtGui import QPixmap, QPainter, QPen, QColor, QPaintEvent, QFontMetrics, QMouseEvent
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QSlider, QVBoxLayout, QWidget, QPushButton, QGridLayout, \
-    QGroupBox, QFormLayout, QLineEdit, QHBoxLayout, QFileDialog, QAction, QComboBox, QSizePolicy, QStyle
+    QGroupBox, QFormLayout, QLineEdit, QHBoxLayout, QFileDialog, QAction, QComboBox, QSizePolicy, QStyle, QRubberBand
 
 from gif import GifSequence
 from keyframes import TextAnimationKeyframe
@@ -38,10 +38,10 @@ class PictureLabel(QLabel):
 
 
 class TemplateSelectionPanel(QWidget):
-    selected_template_changed = Signal(str)
 
-    def __init__(self, meme_template: MemeAnimationTemplate):
+    def __init__(self, parent):
         QWidget.__init__(self)
+        self.parent: MainWindow = parent
 
         layout = QGridLayout()
         self.setLayout(layout)
@@ -53,16 +53,17 @@ class TemplateSelectionPanel(QWidget):
         groupbox.setLayout(vbox)
 
         self.combo = QComboBox(self)
-        self.refresh_selector(meme_template=meme_template)
+        self.refresh_selector()
         self.combo.activated[str].connect(self.on_combo_change)
         vbox.addWidget(self.combo)
 
     def on_combo_change(self, template_id: str):
-        self.selected_template_changed.emit(template_id)
+        self.parent.changeSelectedTextTemplate(template_id)
 
-    def refresh_selector(self, meme_template: MemeAnimationTemplate):
+    def refresh_selector(self):
         self.combo.clear()
-        self.combo.addItems([template.id for template in meme_template.templates_list])
+        self.combo.addItems([template.id for template in self.parent.meme_template.templates_list])
+        self.combo.setCurrentIndex(self.parent.meme_template.templates_list.index(self.parent.selected_text_template))
 
 
 class FramePropertiesPanel(QWidget):
@@ -121,7 +122,7 @@ class FramePropertiesPanel(QWidget):
 
                 if current_keyframe != new_keyframe:
                     self.parent_widget.selected_text_template.keyframes.insert_keyframe(new_keyframe)
-                    self.parent_widget.render_sequence()
+                    self.parent_widget.frames_viewer.update()
             except ValueError:
                 self.parent_widget.statusBar().showMessage("Invalid values for keyframe. Please try again.")
 
@@ -134,7 +135,7 @@ class FramePropertiesPanel(QWidget):
         else:
             keyframes_collection.remove_keyframe(frame_ind)
         self.on_selected_frame_change()
-        self.parent_widget.render_sequence()
+        self.parent_widget.frames_viewer.update()
 
     @QtCore.pyqtSlot(int)
     def on_selected_frame_change(self):
@@ -212,7 +213,6 @@ class KeyframesIndicator(QWidget):
         for frame_ind in keyframes_indices:
             position = QStyle.sliderPositionFromValue(slider.minimum(), slider.maximum(), frame_ind, slider.width())
             painter.drawEllipse(position, 10, 2, 2)
-            print(position)
 
         painter.end()
 
@@ -220,7 +220,76 @@ class KeyframesIndicator(QWidget):
         self.update()
 
 
+class FramesViewer(QLabel):
+    def __init__(self, sequence: GifSequence, parent: 'MainWindow', *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.parent = parent
+        self.sequence = sequence
+        self.pixmaps = [QPixmap.fromImage(qimage2ndarray.array2qimage(frame.array)) for frame in sequence]
+        self.selected_frame_ind = 0
+        self.text_template_to_rect = {}
+        self.rubberBand = QRubberBand(QRubberBand.Rectangle, self)
+        self.rubberBand.show()
+        self.setPixmap(self.pixmaps[self.selected_frame_ind])
+
+    def mousePressEvent(self, e: QMouseEvent):
+        for text_template in self.parent.meme_template.templates_list:
+            if text_template.id in self.text_template_to_rect \
+                    and text_template.id != self.parent.selected_text_template.id \
+                    and self.text_template_to_rect[text_template.id].contains(e.pos()):
+                self.parent.changeSelectedTextTemplate(text_template.id)
+                self.update()
+                return
+
+        self.parent.selected_text_template.keyframes.insert_keyframe(
+            TextAnimationKeyframe(frame_ind=self.selected_frame_ind, position=(e.x(), e.y()))
+        )
+        self.parent.frame_properties_panel.on_selected_frame_change()
+        self.update()
+
+    def mouseMoveEvent(self, e: QMouseEvent):
+        self.parent.selected_text_template.keyframes.insert_keyframe(
+            TextAnimationKeyframe(frame_ind=self.selected_frame_ind, position=(e.x(), e.y()))
+        )
+        self.parent.frame_properties_panel.on_selected_frame_change()
+        self.update()
+
+    def paintEvent(self, e: QPaintEvent):
+        super().paintEvent(e)
+        painter = QtGui.QPainter(self)
+
+        pen = QtGui.QPen()
+        pen.setColor(QtGui.QColor('white'))
+        painter.setPen(pen)
+
+        font = QtGui.QFont()
+        font.setFamily('Montserrat')
+        self.text_template_to_rect = {}
+        for template_id, text in self.parent.render_options.items():
+            text_template = self.parent.meme_template[template_id]
+            keyframe = text_template.keyframes.interpolate(self.selected_frame_ind)
+            font.setPixelSize(keyframe.text_size)
+            painter.setFont(font)
+
+            x, y, width, height = text_template.get_text_bounding_box(center_position=keyframe.position,
+                                                                      font_size=keyframe.text_size,
+                                                                      text=text)
+            text_rect = QRect(x, y, width, height)
+            self.text_template_to_rect[template_id] = text_rect
+            if template_id == self.parent.selected_text_template.id:
+                self.rubberBand.setGeometry(text_rect)
+            painter.drawText(QRect(x, y, width, height), Qt.AlignHCenter | Qt.AlignVCenter, text)
+
+        painter.end()
+
+    def handle_frame_update(self, frame_ind: int):
+        self.selected_frame_ind = frame_ind
+        self.setPixmap(self.pixmaps[self.selected_frame_ind])
+
+
 class MainWindow(QMainWindow):
+    selected_text_template_changed = Signal(str)
+
     def __init__(self, path_to_gif: Union[Path, str], meme_template: MemeAnimationTemplate, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
 
@@ -245,23 +314,22 @@ class MainWindow(QMainWindow):
         self.frames_slider.valueChanged[int].connect(self.on_change_frame)
         self.frames_slider.valueChanged[int].connect(self.frame_properties_panel.on_selected_frame_change)
 
-        self.image_view = PictureLabel(self.sequence[self.frames_slider.value()].array)
-        self.image_view.pictureClicked.connect(self.handle_image_press)
-        self.image_view.setCursor(QtGui.QCursor(Qt.CrossCursor))
-
-        self.render_sequence()
+        self.frames_viewer = FramesViewer(sequence=self.original_sequence, parent=self)
+        self.frames_slider.valueChanged[int].connect(self.frames_viewer.handle_frame_update)
+        self.frames_viewer.setCursor(QtGui.QCursor(Qt.CrossCursor))
 
         left_side_widget = QWidget()
         left_layout = QVBoxLayout()
         self.add_text_template_button = QPushButton('Add New Text Template', self)
         self.add_text_template_button.clicked.connect(self.on_click_add_text_template)
 
-        self.delete_current_text_template = QPushButton('Delete Current Text Template', self)
-        self.delete_current_text_template.clicked.connect(self.on_click_delete_current_text_template)
+        self.delete_current_text_template_button = QPushButton('Delete Current Text Template', self)
+        self.delete_current_text_template_button.clicked.connect(self.on_click_delete_current_text_template)
 
         self.reset_button = QPushButton('Reset', self)
         self.reset_button.clicked.connect(self.on_click_reset)
         self.reset_button.clicked.connect(lambda _: self.frame_properties_panel.on_selected_frame_change())
+        self.reset_button.clicked.connect(self.frames_viewer.update)
 
         loadAction = QAction("&Load animation", self)
         loadAction.setShortcut("Ctrl+O")
@@ -285,17 +353,22 @@ class MainWindow(QMainWindow):
         fileMenu = mainMenu.addMenu('&Animation')
         fileMenu.addAction(resetAllAction)
 
-        self.template_selection_panel = TemplateSelectionPanel(self.meme_template)
-        self.template_selection_panel.selected_template_changed.connect(self.on_text_template_change)
-        self.template_selection_panel.selected_template_changed.connect(
+        self.template_selection_panel = TemplateSelectionPanel(self)
+        self.selected_text_template_changed.connect(
             lambda _: self.frame_properties_panel.on_selected_frame_change()
         )
+        self.selected_text_template_changed.connect(
+            lambda _: self.template_selection_panel.refresh_selector()
+        )
+        self.selected_text_template_changed.connect(
+            lambda _: self.frames_viewer.update()
+        )
 
-        left_layout.addWidget(self.image_view)
+        left_layout.addWidget(self.frames_viewer)
         left_layout.addWidget(self.frames_slider)
         left_layout.addWidget(self.template_selection_panel)
         left_layout.addWidget(self.add_text_template_button)
-        left_layout.addWidget(self.delete_current_text_template)
+        left_layout.addWidget(self.delete_current_text_template_button)
         left_layout.addWidget(self.reset_button)
         left_side_widget.setLayout(left_layout)
 
@@ -316,51 +389,40 @@ class MainWindow(QMainWindow):
         if len(self.meme_template.templates_list) > 1:
             template_id = self.selected_text_template.id
             self.meme_template.remove_template(self.selected_text_template)
-            self.template_selection_panel.refresh_selector(self.meme_template)
-            self.on_text_template_change(self.meme_template.templates_list[0].id)
+            self.changeSelectedTextTemplate(self.meme_template.templates_list[0].id)
             del self.render_options[template_id]
-            self.render_sequence()
 
     def on_click_add_text_template(self):
         initial_template_id = f"Text {1 + len(self.meme_template.templates_list)}"
         self.meme_template.add_template(TextAnimationTemplate(template_id=initial_template_id))
-        self.template_selection_panel.refresh_selector(self.meme_template)
         self.render_options[initial_template_id] = initial_template_id
-        self.template_selection_panel.combo.setCurrentIndex(len(self.meme_template.templates_list) - 1)
-        self.on_text_template_change(self.template_selection_panel.combo.currentText())
-        self.render_sequence()
+        self.changeSelectedTextTemplate(initial_template_id)
 
-    def on_text_template_change(self, template_id: str):
+    def changeSelectedTextTemplate(self, template_id: str):
         self.selected_text_template = self.meme_template[template_id]
+        self.selected_text_template_changed.emit(template_id)
 
     def render_sequence(self):
+        pass
         self.sequence = self.original_sequence.copy()
         self.meme_template.render_spiral(sequence=self.sequence,
                                          render_options=self.render_options,
-                                         current_ind=self.current_frame_index,
-                                         refresh_callback=self.refresh_frame)
-        self.refresh_frame()
-
-    def refresh_frame(self):
-        self.image_view.setImage(self.sequence[self.frames_slider.value()].array)
-        self.image_view.repaint()
+                                         current_ind=self.current_frame_index)
 
     def load_new_sequence(self, sequence: GifSequence):
         self.original_sequence = sequence
         self.sequence = self.original_sequence
-        self.render_sequence()
         self.frames_slider.setMaximum(len(self.sequence) - 1)
 
     def load_animation_data(self, serialized_meme_template: List):
         self.meme_template = MemeAnimationTemplate.deserialize(serialized_meme_template=serialized_meme_template)
-        self.selected_text_template = self.meme_template.templates_list[0]
-        self.render_sequence()
+        self.render_options = {key: key for key in self.meme_template.templates_dict.keys()}
+        self.changeSelectedTextTemplate(self.meme_template.templates_list[0].id)
         self.frame_properties_panel.on_selected_frame_change()
 
     @QtCore.pyqtSlot(int)
     def on_change_frame(self, index: int):
         self.current_frame_index = index
-        self.refresh_frame()
 
     @QtCore.pyqtSlot(tuple)
     def handle_image_press(self, position: Tuple[int, int]):
@@ -368,17 +430,17 @@ class MainWindow(QMainWindow):
             TextAnimationKeyframe(frame_ind=self.current_frame_index, position=position)
         )
         self.frame_properties_panel.on_selected_frame_change()
-        self.render_sequence()
 
     @QtCore.pyqtSlot()
     def on_click_save(self):
+        self.render_sequence()
         file_path, _ = QFileDialog.getSaveFileName(self, 'Save Template as',
-                                                        'c:\\', "JSON file (*.json)")
+                                                   'c:\\', "JSON file (*.json)")
         if file_path:
             with open(file_path, mode='w') as f:
                 json.dump(self.meme_template.serialize(), fp=f, indent=4)
             gif_path = Path(file_path).with_suffix(".gif")
-            self.original_sequence.save(str(gif_path))
+            self.original_sequence.save(str(gif_path), is_loop=True)
             self.statusBar().showMessage(f'Saved template to {file_path} and {gif_path}')
         else:
             self.statusBar().showMessage(f'File not saved')
@@ -386,7 +448,7 @@ class MainWindow(QMainWindow):
     @QtCore.pyqtSlot()
     def on_click_load(self):
         file_path, _ = QFileDialog.getOpenFileName(self, 'Load Animation',
-                                                        'c:\\', "GIF file (*.gif)")
+                                                   'c:\\', "GIF file (*.gif)")
         if os.path.isfile(file_path):
             gif_path = Path(file_path)
             json_path = gif_path.with_suffix(".json")
@@ -405,17 +467,18 @@ class MainWindow(QMainWindow):
     @QtCore.pyqtSlot()
     def on_click_reset(self):
         self.selected_text_template.keyframes.reset()
-        self.render_sequence()
 
     @QtCore.pyqtSlot()
     def on_click_reset_all(self):
         for text_template in self.meme_template.templates_list:
             text_template.keyframes.reset()
-        self.render_sequence()
+        self.frames_viewer.update()
 
 
 if __name__ == '__main__':
     app = QApplication([])
+    _id = QtGui.QFontDatabase.addApplicationFont("Montserrat-Regular.ttf")
+    print(QtGui.QFontDatabase.applicationFontFamilies(_id))
 
     text_template = TextAnimationTemplate("Text 1")
     text_template2 = TextAnimationTemplate("Text 2")

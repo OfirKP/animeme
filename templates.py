@@ -56,10 +56,17 @@ class TextAnimationTemplate(AnimationTemplate):
         template.keyframes = template.keyframes.deserialize(serialized_dict['keyframes'])
         return template
 
+    def __hash__(self):
+        return hash(self.id)
+
     @lru_cache(maxsize=32)
     def get_text_box_shape(self, font_path: str, text_size: int, text: str):
         font = ImageFont.truetype(font_path, size=text_size)
         return font.getsize(text)
+
+    def get_text_bounding_box(self, center_position: Tuple[int, int], font_size: int, text: str):
+        text_width, text_height = self.get_text_box_shape(font_path=self.font_path, text_size=font_size, text=text)
+        return center_position[0] - text_width // 2, center_position[1] - text_height // 2, text_width, text_height
 
     def _draw_outlined_text(self,
                             image: Image,
@@ -73,27 +80,26 @@ class TextAnimationTemplate(AnimationTemplate):
         white_alpha = 240
 
         overlay = Image.new('RGBA', image.size)
-        text_width, text_height = self.get_text_box_shape(font_path=self.font_path, text_size=font.size, text=content)
-        position = (position[0] - text_width // 2, position[1] - text_height // 2)
+        x, y, text_width, text_height = self.get_text_bounding_box(center_position=position,
+                                                                   font_size=font.size,
+                                                                   text=content)
 
         draw = ImageDraw.ImageDraw(overlay, 'RGBA')
         if background_fill is not None:
-            text_width, text_height = font.getsize(content)
             margin = 10
-            x, y = position
             draw.rectangle([(x - margin, y - margin),
                             (x + text_width + margin - 1, y + text_height + margin - 1)],
                            fill=background_fill)
 
         # Draw black text outlines
-        for x in range(-width, 1 + width):
-            for y in range(-width, 1 + width):
-                pos = (position[0] + x, position[1] + y)
+        for offset_x in range(-width, 1 + width):
+            for offset_y in range(-width, 1 + width):
+                pos = (x + offset_x, y + offset_y)
                 draw.multiline_text(pos, content, (0, 0, 0, black_alpha),
-                                    font=font, align='center')
+                          font=font, align='center')
 
         # Draw inner white text
-        draw.text(position, content, (255, 255, 255, white_alpha),
+        draw.text((x, y), content, (255, 255, 255, white_alpha),
                   font=font, align='center')
 
         image.paste(overlay, None, overlay)
@@ -140,15 +146,13 @@ class MemeAnimationTemplate:
         return roundrobin(forward, backward)
 
     def render_spiral(self, sequence: GifSequence, render_options: Dict[str, str],
-                      current_ind: int, refresh_callback: Callable):
+                      current_ind: int):
         for frame_ind in self.spiral(start_ind=current_ind, length=len(sequence)):
             for template_id, content in render_options.items():
                 self.templates_dict[template_id].render_frame(sequence=sequence,
                                                               frame_ind=frame_ind,
                                                               content=content,
                                                               inplace=True)
-            if frame_ind == current_ind:
-                refresh_callback()
 
     def serialize(self) -> List[dict]:
         return [template.serialize() for template in self.templates_list]
