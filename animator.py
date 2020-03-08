@@ -1,8 +1,9 @@
 import json
 import os
 from pathlib import Path
-from typing import Tuple, Union, List, Optional
+from typing import Tuple, List, Optional
 
+import numpy as np
 import qimage2ndarray
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtCore import Qt, pyqtSignal as Signal, QRect
@@ -11,7 +12,7 @@ from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QSlider, QVBoxLay
     QGroupBox, QFormLayout, QLineEdit, QHBoxLayout, QFileDialog, QAction, QComboBox, QSizePolicy, QStyle, QRubberBand, \
     QColorDialog
 
-from gif import GifSequence
+from gif import GifSequence, GifFrame
 from keyframes import TextAnimationKeyframe
 from templates import TextAnimationTemplate, MemeAnimationTemplate
 
@@ -418,11 +419,11 @@ class FramesViewer(QLabel):
 class MainWindow(QMainWindow):
     selected_text_template_changed = Signal(str)
 
-    def __init__(self, path_to_gif: Union[Path, str], meme_template: MemeAnimationTemplate, *args, **kwargs):
+    def __init__(self, sequence: GifSequence, meme_template: MemeAnimationTemplate, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
 
-        self.setWindowTitle(f"Animator - {os.path.basename(path_to_gif)}")
-        self.original_sequence = GifSequence.open(path=path_to_gif, method="mpy")
+        self.setWindowTitle(f"Animator")
+        self.original_sequence = sequence
         self.meme_template = meme_template
         self.selected_text_template = meme_template.templates_list[0]
         self.render_options = {key: key for key in self.meme_template.templates_dict.keys()}
@@ -611,10 +612,11 @@ if __name__ == '__main__':
     _id = QtGui.QFontDatabase.addApplicationFont("Montserrat-Regular.ttf")
     print(QtGui.QFontDatabase.applicationFontFamilies(_id))
 
-    text_template = TextAnimationTemplate("Text 1")
-    text_template2 = TextAnimationTemplate("Text 2")
-    meme_template = MemeAnimationTemplate(text_templates=[text_template])
-    window = MainWindow("trump.gif", meme_template=meme_template)
+    # default_sequence = GifSequence.open("test.gif")
+    default_sequence = GifSequence.from_frames([GifFrame.from_array(array=np.zeros((400, 400)), duration=50)])
+    default_text_template = TextAnimationTemplate("Text 1")
+    default_meme_template = MemeAnimationTemplate(text_templates=[default_text_template])
+    window = MainWindow(sequence=default_sequence, meme_template=default_meme_template)
     window.show()
 
     app.exec_()
