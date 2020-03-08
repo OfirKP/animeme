@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from itertools import cycle, islice
-from typing import Tuple, Optional, List, Dict, Callable
+from typing import Tuple, Optional, List, Dict, Union
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -29,6 +29,10 @@ class TextAnimationTemplate(AnimationTemplate):
                                                                  position=initial_position,
                                                                  text_size=initial_text_size))
         self.font_path = 'Montserrat-Regular.ttf'
+        self.text_color: str = "#FFF"
+        self.background_color: Optional[Tuple] = None
+        self.stroke_width: int = 0
+        self.stroke_color: str = "#000"
 
     def render(self, sequence: GifSequence, content: str):
         rendered_frames = []
@@ -41,19 +45,32 @@ class TextAnimationTemplate(AnimationTemplate):
         image = sequence[frame_ind].to_image()
         self._draw_outlined_text(image, position=current_state.position, content=content,
                                  font=ImageFont.truetype(self.font_path, size=current_state.text_size),
-                                 width=1)
+                                 background_color=self.background_color,
+                                 stroke_width=self.stroke_width,
+                                 stroke_color=self.stroke_color)
         new_frame = GifFrame(image)
         if inplace:
             sequence[frame_ind] = new_frame
         return new_frame
 
     def serialize(self) -> dict:
-        return dict(id=self.id, keyframes=self.keyframes.serialize())
+        return dict(id=self.id,
+                    keyframes=self.keyframes.serialize(),
+                    font_path=self.font_path,
+                    text_color=self.text_color,
+                    background_color=self.background_color,
+                    stroke_width=self.stroke_width,
+                    stroke_color=self.stroke_color)
 
     @classmethod
     def deserialize(cls, serialized_dict: dict):
         template = TextAnimationTemplate(template_id=serialized_dict['id'])
         template.keyframes = template.keyframes.deserialize(serialized_dict['keyframes'])
+        template.font_path = serialized_dict['font_path']
+        template.text_color = serialized_dict['text_color']
+        template.background_color = serialized_dict['background_color']
+        template.stroke_width = serialized_dict['stroke_width']
+        template.stroke_color = serialized_dict['stroke_color']
         return template
 
     def __hash__(self):
@@ -62,7 +79,7 @@ class TextAnimationTemplate(AnimationTemplate):
     @lru_cache(maxsize=32)
     def get_text_box_shape(self, font_path: str, text_size: int, text: str):
         font = ImageFont.truetype(font_path, size=text_size)
-        return font.getsize(text)
+        return font.getsize_multiline(text)
 
     def get_text_bounding_box(self, center_position: Tuple[int, int], font_size: int, text: str):
         text_width, text_height = self.get_text_box_shape(font_path=self.font_path, text_size=font_size, text=text)
@@ -73,11 +90,9 @@ class TextAnimationTemplate(AnimationTemplate):
                             position: Tuple[int, int],
                             content: str,
                             font: ImageFont.ImageFont,
-                            background_fill=None,
-                            width=1):
-
-        black_alpha = 255
-        white_alpha = 240
+                            background_color: Optional[Union[Tuple, str]] = None,
+                            stroke_width: int = 0,
+                            stroke_color: Union[Tuple, str] = "#000"):
 
         overlay = Image.new('RGBA', image.size)
         x, y, text_width, text_height = self.get_text_bounding_box(center_position=position,
@@ -85,22 +100,15 @@ class TextAnimationTemplate(AnimationTemplate):
                                                                    text=content)
 
         draw = ImageDraw.ImageDraw(overlay, 'RGBA')
-        if background_fill is not None:
+        if background_color is not None:
             margin = 10
             draw.rectangle([(x - margin, y - margin),
-                            (x + text_width + margin - 1, y + text_height + margin - 1)],
-                           fill=background_fill)
-
-        # Draw black text outlines
-        for offset_x in range(-width, 1 + width):
-            for offset_y in range(-width, 1 + width):
-                pos = (x + offset_x, y + offset_y)
-                draw.multiline_text(pos, content, (0, 0, 0, black_alpha),
-                          font=font, align='center')
+                            (x + text_width + 2 * margin, y + text_height + 2 * margin)],
+                           fill=background_color)
 
         # Draw inner white text
-        draw.text((x, y), content, (255, 255, 255, white_alpha),
-                  font=font, align='center')
+        draw.multiline_text((x, y), content, self.text_color,
+                            font=font, align='center', stroke_width=stroke_width, stroke_fill=stroke_color)
 
         image.paste(overlay, None, overlay)
 

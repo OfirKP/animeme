@@ -1,40 +1,19 @@
 import json
 import os
-from functools import partial
 from pathlib import Path
 from typing import Tuple, Union, List, Optional
 
-import numpy as np
 import qimage2ndarray
-from PIL import ImageFont
 from PyQt5 import QtCore, QtGui
-from PyQt5.QtCore import Qt, pyqtSignal as Signal, QPoint, QRect
-from PyQt5.QtGui import QPixmap, QPainter, QPen, QColor, QPaintEvent, QFontMetrics, QMouseEvent
+from PyQt5.QtCore import Qt, pyqtSignal as Signal, QRect
+from PyQt5.QtGui import QPixmap, QPainter, QPen, QColor, QPaintEvent, QMouseEvent, QPainterPath
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QSlider, QVBoxLayout, QWidget, QPushButton, QGridLayout, \
-    QGroupBox, QFormLayout, QLineEdit, QHBoxLayout, QFileDialog, QAction, QComboBox, QSizePolicy, QStyle, QRubberBand
+    QGroupBox, QFormLayout, QLineEdit, QHBoxLayout, QFileDialog, QAction, QComboBox, QSizePolicy, QStyle, QRubberBand, \
+    QColorDialog
 
 from gif import GifSequence
 from keyframes import TextAnimationKeyframe
 from templates import TextAnimationTemplate, MemeAnimationTemplate
-
-
-class PictureLabel(QLabel):
-    pictureClicked = Signal(tuple)  # can be other types (list, dict, object...)
-
-    def __init__(self, image: np.ndarray, parent=None):
-        super(PictureLabel, self).__init__(parent)
-        self.setPixmap(
-            QPixmap.fromImage(qimage2ndarray.array2qimage(image))
-        )
-
-    def setImage(self, image: np.ndarray):
-        self.setPixmap(
-            QPixmap.fromImage(qimage2ndarray.array2qimage(image))
-        )
-
-    def mousePressEvent(self, event):
-        position = event.pos().x(), event.pos().y()
-        self.pictureClicked.emit(position)
 
 
 class TemplateSelectionPanel(QWidget):
@@ -66,13 +45,133 @@ class TemplateSelectionPanel(QWidget):
         self.combo.setCurrentIndex(self.parent.meme_template.templates_list.index(self.parent.selected_text_template))
 
 
-class FramePropertiesPanel(QWidget):
-    def __init__(self, meme_template: MemeAnimationTemplate, parent=None):
-        QWidget.__init__(self, parent=parent)
+class ColorButton(QPushButton):
+    """
+    Custom Qt Widget to show a chosen color.
+
+    Left-clicking the button shows the color-chooser, while
+    right-clicking resets the color to None (no-color).
+    """
+
+    colorChangedFromDialog = Signal()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setObjectName("ColorButton")
+        self._color = None
+        self.setMaximumWidth(32)
+        self.pressed.connect(self.onColorPicker)
+
+    def setColor(self, color: Optional[QColor]):
+        if color != self._color:
+            self._color = color
+
+        if self._color:
+            self.setStyleSheet("#ColorButton {background-color: %s}" % self._color.name())
+        else:
+            self.setStyleSheet("")
+
+    def color(self):
+        return self._color
+
+    def onColorPicker(self):
+        """
+        Show color-picker dialog to select color.
+
+        Qt will use the native dialog by default.
+
+        """
+        dlg = QColorDialog(self)
+        if self._color:
+            dlg.setCurrentColor(QColor(self._color))
+
+        if dlg.exec_():
+            self.setColor(dlg.currentColor())
+            self.colorChangedFromDialog.emit()
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.RightButton:
+            self.setColor(None)
+            self.colorChangedFromDialog.emit()
+
+        return super().mousePressEvent(e)
+
+
+class TextTemplatePropertiesPanel(QWidget):
+    text_template_properties_changed = Signal()
+
+    def __init__(self, parent):
+        super().__init__()
 
         self.is_enabled = False
-        self.parent_widget: MainWindow = parent
-        self.meme_template = meme_template
+        self.parent: MainWindow = parent
+        self.keyframe: Optional[TextAnimationKeyframe] = None
+        layout = QGridLayout()
+        self.setLayout(layout)
+
+        groupBox = QGroupBox("Text Template Properties")
+        layout.addWidget(groupBox)
+
+        self.textColorButton = ColorButton()
+
+        self.textColorButton.setColor(QColor("white"))
+        self.backgroundColorButton = ColorButton()
+        self.strokeWidthEdit = QLineEdit()
+        self.yEdit = QLineEdit()
+        self.strokeColorButton = ColorButton()
+        self.strokeColorButton.setColor(QColor("black"))
+
+        self.strokeWidthEdit.setText("0")
+
+        self.textColorButton.colorChangedFromDialog.connect(self.on_editing_finished)
+        self.backgroundColorButton.colorChangedFromDialog.connect(self.on_editing_finished)
+        self.strokeWidthEdit.editingFinished.connect(self.on_editing_finished)
+        self.strokeColorButton.colorChangedFromDialog.connect(self.on_editing_finished)
+
+        layout = QFormLayout()
+        layout.addRow(QLabel("Text Color"), self.textColorButton)
+        layout.addRow(QLabel("Background Color"), self.backgroundColorButton)
+        layout.addRow(QLabel("Stroke"), self.strokeWidthEdit)
+        layout.addRow(QLabel("Stroke Color"), self.strokeColorButton)
+        groupBox.setLayout(layout)
+
+    def refresh(self):
+        text_template = self.parent.selected_text_template
+        self.textColorButton.setColor(QColor(text_template.text_color) if text_template.text_color else None)
+        self.backgroundColorButton.setColor(QColor(text_template.background_color)
+                                            if text_template.background_color else None)
+        self.strokeColorButton.setColor(QColor(text_template.stroke_color) if text_template.stroke_color else None)
+        self.strokeWidthEdit.setText(str(text_template.stroke_width))
+
+    def on_editing_finished(self):
+        stroke_width_str = self.strokeWidthEdit.text()
+        text_color = self.textColorButton.color()
+        background_color = self.backgroundColorButton.color()
+        stroke_color = self.strokeColorButton.color()
+
+        try:
+            stroke_width = int(stroke_width_str) if stroke_width_str else 0
+            text_color_name = text_color.name() if text_color is not None else None
+            background_color_name = background_color.name() if background_color is not None else None
+            stroke_color_name = stroke_color.name() if stroke_color is not None else None
+
+            self.parent.selected_text_template.stroke_width = stroke_width
+            self.parent.selected_text_template.text_color = text_color_name
+            self.parent.selected_text_template.background_color = background_color_name
+            self.parent.selected_text_template.stroke_color = stroke_color_name
+
+        except ValueError:
+            self.parent.statusBar().showMessage("Invalid properties for template. Please try again.")
+
+        self.text_template_properties_changed.emit()
+
+
+class FramePropertiesPanel(QWidget):
+    def __init__(self, parent):
+        super().__init__()
+
+        self.is_enabled = False
+        self.parent: MainWindow = parent
         self.keyframe: Optional[TextAnimationKeyframe] = None
         layout = QGridLayout()
         self.setLayout(layout)
@@ -116,31 +215,31 @@ class FramePropertiesPanel(QWidget):
                                                      text_size=int(text_size_str) if text_size_str else None)
 
                 # TODO: handle frame index changing
-                current_keyframe = self.parent_widget.selected_text_template.keyframes.get_keyframe(
-                    self.parent_widget.current_frame_index
+                current_keyframe = self.parent.selected_text_template.keyframes.get_keyframe(
+                    self.parent.current_frame_index
                 )
 
                 if current_keyframe != new_keyframe:
-                    self.parent_widget.selected_text_template.keyframes.insert_keyframe(new_keyframe)
-                    self.parent_widget.frames_viewer.update()
+                    self.parent.selected_text_template.keyframes.insert_keyframe(new_keyframe)
+                    self.parent.frames_viewer.update()
             except ValueError:
-                self.parent_widget.statusBar().showMessage("Invalid values for keyframe. Please try again.")
+                self.parent.statusBar().showMessage("Invalid values for keyframe. Please try again.")
 
     @QtCore.pyqtSlot(bool)
     def on_toggle_keyframe(self, is_add: bool):
-        keyframes_collection = self.parent_widget.selected_text_template.keyframes
+        keyframes_collection = self.parent.selected_text_template.keyframes
         frame_ind = int(self.frameEdit.text())
         if is_add:
             keyframes_collection.insert_keyframe(keyframes_collection.interpolate(frame_ind))
         else:
             keyframes_collection.remove_keyframe(frame_ind)
         self.on_selected_frame_change()
-        self.parent_widget.frames_viewer.update()
+        self.parent.frames_viewer.update()
 
     @QtCore.pyqtSlot(int)
     def on_selected_frame_change(self):
-        frame_num = self.parent_widget.current_frame_index
-        keyframes_collection = self.parent_widget.selected_text_template.keyframes
+        frame_num = self.parent.current_frame_index
+        keyframes_collection = self.parent.selected_text_template.keyframes
         if frame_num in keyframes_collection.keyframes_frames_indices:
             keyframe = keyframes_collection.get_keyframe(frame_num)
             self.updateForm(frame_ind=frame_num, x=keyframe.x, y=keyframe.y, text_size=keyframe.text_size)
@@ -224,13 +323,16 @@ class FramesViewer(QLabel):
     def __init__(self, sequence: GifSequence, parent: 'MainWindow', *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.parent = parent
-        self.sequence = sequence
-        self.pixmaps = [QPixmap.fromImage(qimage2ndarray.array2qimage(frame.array)) for frame in sequence]
+        self.pixmaps = []
+        self.loadSequence(sequence)
         self.selected_frame_ind = 0
         self.text_template_to_rect = {}
         self.rubberBand = QRubberBand(QRubberBand.Rectangle, self)
         self.rubberBand.show()
         self.setPixmap(self.pixmaps[self.selected_frame_ind])
+
+    def loadSequence(self, sequence: GifSequence):
+        self.pixmaps = [QPixmap.fromImage(qimage2ndarray.array2qimage(frame.array)) for frame in sequence]
 
     def mousePressEvent(self, e: QMouseEvent):
         for text_template in self.parent.meme_template.templates_list:
@@ -257,28 +359,54 @@ class FramesViewer(QLabel):
     def paintEvent(self, e: QPaintEvent):
         super().paintEvent(e)
         painter = QtGui.QPainter(self)
-
         pen = QtGui.QPen()
-        pen.setColor(QtGui.QColor('white'))
-        painter.setPen(pen)
+        brush = QtGui.QBrush()
+        brush.setStyle(Qt.SolidPattern)
 
         font = QtGui.QFont()
         font.setFamily('Montserrat')
         self.text_template_to_rect = {}
+
         for template_id, text in self.parent.render_options.items():
             text_template = self.parent.meme_template[template_id]
+            pen.setColor(QtGui.QColor(text_template.text_color))
+            painter.setPen(pen)
+
             keyframe = text_template.keyframes.interpolate(self.selected_frame_ind)
             font.setPixelSize(keyframe.text_size)
             painter.setFont(font)
 
+            margin = 10
             x, y, width, height = text_template.get_text_bounding_box(center_position=keyframe.position,
                                                                       font_size=keyframe.text_size,
                                                                       text=text)
             text_rect = QRect(x, y, width, height)
             self.text_template_to_rect[template_id] = text_rect
+
+            background_rect = None
+            if text_template.background_color is not None:
+                background_rect = text_rect.adjusted(-margin, -margin, margin, margin)
+                painter.fillRect(background_rect, QColor(text_template.background_color))
             if template_id == self.parent.selected_text_template.id:
-                self.rubberBand.setGeometry(text_rect)
-            painter.drawText(QRect(x, y, width, height), Qt.AlignHCenter | Qt.AlignVCenter, text)
+                rubber_rect = background_rect if background_rect is not None else text_rect
+                self.rubberBand.setGeometry(rubber_rect)
+
+            if text_template.stroke_width:
+                painter.setRenderHint(QPainter.Antialiasing, True)
+                brush.setColor(QColor(text_template.text_color))
+                painter.setBrush(brush)
+
+                pen.setColor(QColor(text_template.stroke_color))
+                pen.setWidth(text_template.stroke_width * 2)
+                painter.setPen(pen)
+
+                path = QPainterPath()
+                path.addText(text_rect.bottomLeft(), font, text)
+                painter.strokePath(path, pen)
+                painter.fillPath(path, brush)
+
+            else:
+                painter.drawText(text_rect, Qt.AlignHCenter | Qt.AlignVCenter, text)
 
         painter.end()
 
@@ -295,21 +423,22 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(f"Animator - {os.path.basename(path_to_gif)}")
         self.original_sequence = GifSequence.open(path=path_to_gif, method="mpy")
-        self.sequence = self.original_sequence
-
         self.meme_template = meme_template
         self.selected_text_template = meme_template.templates_list[0]
         self.render_options = {key: key for key in self.meme_template.templates_dict.keys()}
         self.current_frame_index = 0
 
         # self.keyframes_indicator = KeyframesIndicator(self)
-        self.frame_properties_panel = FramePropertiesPanel(meme_template, parent=self)
+        self.frame_properties_panel = FramePropertiesPanel(parent=self)
         self.frame_properties_panel.on_selected_frame_change()
+
+        self.text_template_properties_panel = TextTemplatePropertiesPanel(parent=self)
+        self.selected_text_template_changed.connect(lambda _: self.text_template_properties_panel.refresh())
         # self.frame_properties_panel.toggleKeyframeButton.clicked.connect(self.keyframes_indicator.refresh)
 
         self.frames_slider = QSlider(Qt.Horizontal, self)
         self.frames_slider.setMinimum(0)
-        self.frames_slider.setMaximum(len(self.sequence) - 1)
+        self.frames_slider.setMaximum(len(self.original_sequence) - 1)
         self.frames_slider.setTickPosition(QSlider.TicksBelow)
         self.frames_slider.valueChanged[int].connect(self.on_change_frame)
         self.frames_slider.valueChanged[int].connect(self.frame_properties_panel.on_selected_frame_change)
@@ -317,6 +446,8 @@ class MainWindow(QMainWindow):
         self.frames_viewer = FramesViewer(sequence=self.original_sequence, parent=self)
         self.frames_slider.valueChanged[int].connect(self.frames_viewer.handle_frame_update)
         self.frames_viewer.setCursor(QtGui.QCursor(Qt.CrossCursor))
+
+        self.text_template_properties_panel.text_template_properties_changed.connect(self.frames_viewer.update)
 
         left_side_widget = QWidget()
         left_layout = QVBoxLayout()
@@ -375,6 +506,7 @@ class MainWindow(QMainWindow):
         right_side_widget = QWidget()
         right_layout = QVBoxLayout()
         right_layout.addWidget(self.frame_properties_panel)
+        right_layout.addWidget(self.text_template_properties_panel)
         right_side_widget.setLayout(right_layout)
 
         main_widget = QWidget()
@@ -402,17 +534,11 @@ class MainWindow(QMainWindow):
         self.selected_text_template = self.meme_template[template_id]
         self.selected_text_template_changed.emit(template_id)
 
-    def render_sequence(self):
-        pass
-        self.sequence = self.original_sequence.copy()
-        self.meme_template.render_spiral(sequence=self.sequence,
-                                         render_options=self.render_options,
-                                         current_ind=self.current_frame_index)
-
     def load_new_sequence(self, sequence: GifSequence):
         self.original_sequence = sequence
-        self.sequence = self.original_sequence
-        self.frames_slider.setMaximum(len(self.sequence) - 1)
+        self.frames_slider.setMaximum(len(self.original_sequence) - 1)
+        self.frames_viewer.loadSequence(sequence)
+        self.frames_viewer.handle_frame_update(frame_ind=self.current_frame_index)
 
     def load_animation_data(self, serialized_meme_template: List):
         self.meme_template = MemeAnimationTemplate.deserialize(serialized_meme_template=serialized_meme_template)
@@ -433,14 +559,19 @@ class MainWindow(QMainWindow):
 
     @QtCore.pyqtSlot()
     def on_click_save(self):
-        self.render_sequence()
+        # rendered_sequence = self.meme_template.render(sequence=self.sequence,
+        #                                               render_options=self.render_options)
         file_path, _ = QFileDialog.getSaveFileName(self, 'Save Template as',
                                                    'c:\\', "JSON file (*.json)")
         if file_path:
             with open(file_path, mode='w') as f:
                 json.dump(self.meme_template.serialize(), fp=f, indent=4)
             gif_path = Path(file_path).with_suffix(".gif")
-            self.original_sequence.save(str(gif_path), is_loop=True)
+            try:
+                self.original_sequence.save(str(gif_path), is_loop=True)
+            except PermissionError as e:
+                self.statusBar().showMessage(f"PermissionError: Couldn't save file to this location")
+
             self.statusBar().showMessage(f'Saved template to {file_path} and {gif_path}')
         else:
             self.statusBar().showMessage(f'File not saved')
