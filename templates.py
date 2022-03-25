@@ -28,6 +28,7 @@ class TextAnimationTemplate(AnimationTemplate):
             self.keyframes.insert_keyframe(TextAnimationKeyframe(frame_ind=0,
                                                                  position=initial_position,
                                                                  text_size=initial_text_size))
+        self.text_value = self.id
         self.font_path = 'Montserrat-Regular.ttf'
         self.text_color: str = "#FFF"
         self.background_color: Optional[Tuple] = None

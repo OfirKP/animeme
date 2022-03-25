@@ -119,17 +119,20 @@ class TextTemplatePropertiesPanel(QWidget):
         self.backgroundColorButton = ColorButton()
         self.strokeWidthEdit = QLineEdit()
         self.yEdit = QLineEdit()
+        self.textValue = QLineEdit()
         self.strokeColorButton = ColorButton()
         self.strokeColorButton.setColor(QColor("black"))
 
         self.strokeWidthEdit.setText("0")
 
+        self.textValue.editingFinished.connect(self.on_editing_finished)
         self.textColorButton.colorChangedFromDialog.connect(self.on_editing_finished)
         self.backgroundColorButton.colorChangedFromDialog.connect(self.on_editing_finished)
         self.strokeWidthEdit.editingFinished.connect(self.on_editing_finished)
         self.strokeColorButton.colorChangedFromDialog.connect(self.on_editing_finished)
 
         layout = QFormLayout()
+        layout.addRow(QLabel("Text Value"), self.textValue)
         layout.addRow(QLabel("Text Color"), self.textColorButton)
         layout.addRow(QLabel("Background Color"), self.backgroundColorButton)
         layout.addRow(QLabel("Stroke"), self.strokeWidthEdit)
@@ -138,6 +141,7 @@ class TextTemplatePropertiesPanel(QWidget):
 
     def refresh(self):
         text_template = self.parent.selected_text_template
+        self.textValue.setText(str(text_template.text_value))
         self.textColorButton.setColor(QColor(text_template.text_color) if text_template.text_color else None)
         self.backgroundColorButton.setColor(QColor(text_template.background_color)
                                             if text_template.background_color else None)
@@ -145,6 +149,7 @@ class TextTemplatePropertiesPanel(QWidget):
         self.strokeWidthEdit.setText(str(text_template.stroke_width))
 
     def on_editing_finished(self):
+        text_value_str = self.textValue.text()
         stroke_width_str = self.strokeWidthEdit.text()
         text_color = self.textColorButton.color()
         background_color = self.backgroundColorButton.color()
@@ -156,6 +161,7 @@ class TextTemplatePropertiesPanel(QWidget):
             background_color_name = background_color.name() if background_color is not None else None
             stroke_color_name = stroke_color.name() if stroke_color is not None else None
 
+            self.parent.selected_text_template.text_value = text_value_str
             self.parent.selected_text_template.stroke_width = stroke_width
             self.parent.selected_text_template.text_color = text_color_name
             self.parent.selected_text_template.background_color = background_color_name
@@ -380,7 +386,7 @@ class FramesViewer(QLabel):
             margin = 10
             x, y, width, height = text_template.get_text_bounding_box(center_position=keyframe.position,
                                                                       font_size=keyframe.text_size,
-                                                                      text=text)
+                                                                      text=text_template.text_value)
             text_rect = QRect(x, y, width, height)
             self.text_template_to_rect[template_id] = text_rect
 
@@ -402,12 +408,12 @@ class FramesViewer(QLabel):
                 painter.setPen(pen)
 
                 path = QPainterPath()
-                path.addText(text_rect.bottomLeft(), font, text)
+                path.addText(text_rect.bottomLeft(), font, text_template.text_value)
                 painter.strokePath(path, pen)
                 painter.fillPath(path, brush)
 
             else:
-                painter.drawText(text_rect, Qt.AlignHCenter | Qt.AlignVCenter, text)
+                painter.drawText(text_rect, Qt.AlignHCenter | Qt.AlignVCenter, text_template.text_value)
 
         painter.end()
 
