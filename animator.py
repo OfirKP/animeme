@@ -524,6 +524,9 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(main_widget)
 
+        # Trigger the initial refresh
+        self.selected_text_template_changed.emit(self.meme_template.templates_list[0].id)
+
     def on_click_delete_current_text_template(self):
         if len(self.meme_template.templates_list) > 1:
             template_id = self.selected_text_template.id
