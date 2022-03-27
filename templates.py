@@ -109,7 +109,8 @@ class TextAnimationTemplate(AnimationTemplate):
 
         # Draw inner white text
         draw.multiline_text((x, y), content, self.text_color,
-                            font=font, align='center', stroke_width=stroke_width, stroke_fill=stroke_color)
+                            font=font, align='center',
+                            stroke_width=stroke_width, stroke_fill=stroke_color)
 
         image.paste(overlay, None, overlay)
 

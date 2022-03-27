@@ -10,7 +10,7 @@ from PyQt5.QtCore import Qt, pyqtSignal as Signal, QRect
 from PyQt5.QtGui import QPixmap, QPainter, QPen, QColor, QPaintEvent, QMouseEvent, QPainterPath
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QSlider, QVBoxLayout, QWidget, QPushButton, QGridLayout, \
     QGroupBox, QFormLayout, QLineEdit, QHBoxLayout, QFileDialog, QAction, QComboBox, QSizePolicy, QStyle, QRubberBand, \
-    QColorDialog
+    QColorDialog, QPlainTextEdit
 
 from gif import GifSequence, GifFrame
 from keyframes import TextAnimationKeyframe
@@ -119,13 +119,13 @@ class TextTemplatePropertiesPanel(QWidget):
         self.backgroundColorButton = ColorButton()
         self.strokeWidthEdit = QLineEdit()
         self.yEdit = QLineEdit()
-        self.textValue = QLineEdit()
+        self.textValue = QPlainTextEdit()
         self.strokeColorButton = ColorButton()
         self.strokeColorButton.setColor(QColor("black"))
 
-        self.strokeWidthEdit.setText("0")
+        self.strokeWidthEdit.setText("2")
 
-        self.textValue.editingFinished.connect(self.on_editing_finished)
+        self.textValue.textChanged.connect(self.on_editing_finished)
         self.textColorButton.colorChangedFromDialog.connect(self.on_editing_finished)
         self.backgroundColorButton.colorChangedFromDialog.connect(self.on_editing_finished)
         self.strokeWidthEdit.editingFinished.connect(self.on_editing_finished)
@@ -141,7 +141,7 @@ class TextTemplatePropertiesPanel(QWidget):
 
     def refresh(self):
         text_template = self.parent.selected_text_template
-        self.textValue.setText(str(text_template.text_value))
+        self.textValue.setPlainText(str(text_template.text_value))
         self.textColorButton.setColor(QColor(text_template.text_color) if text_template.text_color else None)
         self.backgroundColorButton.setColor(QColor(text_template.background_color)
                                             if text_template.background_color else None)
@@ -149,7 +149,7 @@ class TextTemplatePropertiesPanel(QWidget):
         self.strokeWidthEdit.setText(str(text_template.stroke_width))
 
     def on_editing_finished(self):
-        text_value_str = self.textValue.text()
+        text_value_str = self.textValue.toPlainText()
         stroke_width_str = self.strokeWidthEdit.text()
         text_color = self.textColorButton.color()
         background_color = self.backgroundColorButton.color()
