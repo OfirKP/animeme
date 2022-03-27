@@ -10,7 +10,7 @@ from PyQt5.QtCore import Qt, pyqtSignal as Signal, QRect
 from PyQt5.QtGui import QPixmap, QPainter, QPen, QColor, QPaintEvent, QMouseEvent, QPainterPath
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QSlider, QVBoxLayout, QWidget, QPushButton, QGridLayout, \
     QGroupBox, QFormLayout, QLineEdit, QHBoxLayout, QFileDialog, QAction, QComboBox, QSizePolicy, QStyle, QRubberBand, \
-    QColorDialog
+    QColorDialog, QPlainTextEdit, QMessageBox
 
 from gif import GifSequence, GifFrame
 from keyframes import TextAnimationKeyframe
@@ -119,17 +119,20 @@ class TextTemplatePropertiesPanel(QWidget):
         self.backgroundColorButton = ColorButton()
         self.strokeWidthEdit = QLineEdit()
         self.yEdit = QLineEdit()
+        self.textValue = QPlainTextEdit()
         self.strokeColorButton = ColorButton()
         self.strokeColorButton.setColor(QColor("black"))
 
-        self.strokeWidthEdit.setText("0")
+        self.strokeWidthEdit.setText("2")
 
+        self.textValue.textChanged.connect(self.on_editing_finished)
         self.textColorButton.colorChangedFromDialog.connect(self.on_editing_finished)
         self.backgroundColorButton.colorChangedFromDialog.connect(self.on_editing_finished)
         self.strokeWidthEdit.editingFinished.connect(self.on_editing_finished)
         self.strokeColorButton.colorChangedFromDialog.connect(self.on_editing_finished)
 
         layout = QFormLayout()
+        layout.addRow(QLabel("Text Value"), self.textValue)
         layout.addRow(QLabel("Text Color"), self.textColorButton)
         layout.addRow(QLabel("Background Color"), self.backgroundColorButton)
         layout.addRow(QLabel("Stroke"), self.strokeWidthEdit)
@@ -138,6 +141,7 @@ class TextTemplatePropertiesPanel(QWidget):
 
     def refresh(self):
         text_template = self.parent.selected_text_template
+        self.textValue.setPlainText(str(text_template.text_value))
         self.textColorButton.setColor(QColor(text_template.text_color) if text_template.text_color else None)
         self.backgroundColorButton.setColor(QColor(text_template.background_color)
                                             if text_template.background_color else None)
@@ -145,6 +149,7 @@ class TextTemplatePropertiesPanel(QWidget):
         self.strokeWidthEdit.setText(str(text_template.stroke_width))
 
     def on_editing_finished(self):
+        text_value_str = self.textValue.toPlainText()
         stroke_width_str = self.strokeWidthEdit.text()
         text_color = self.textColorButton.color()
         background_color = self.backgroundColorButton.color()
@@ -156,6 +161,7 @@ class TextTemplatePropertiesPanel(QWidget):
             background_color_name = background_color.name() if background_color is not None else None
             stroke_color_name = stroke_color.name() if stroke_color is not None else None
 
+            self.parent.selected_text_template.text_value = text_value_str
             self.parent.selected_text_template.stroke_width = stroke_width
             self.parent.selected_text_template.text_color = text_color_name
             self.parent.selected_text_template.background_color = background_color_name
@@ -380,7 +386,7 @@ class FramesViewer(QLabel):
             margin = 10
             x, y, width, height = text_template.get_text_bounding_box(center_position=keyframe.position,
                                                                       font_size=keyframe.text_size,
-                                                                      text=text)
+                                                                      text=text_template.text_value)
             text_rect = QRect(x, y, width, height)
             self.text_template_to_rect[template_id] = text_rect
 
@@ -402,12 +408,25 @@ class FramesViewer(QLabel):
                 painter.setPen(pen)
 
                 path = QPainterPath()
-                path.addText(text_rect.bottomLeft(), font, text)
+                # Split multiline text
+                lines = text_template.text_value.split('\n')
+                # Reverse it so when multiline, the first line is on top
+                lines.reverse()
+                # Split up the height of the bounding box (which already correctly scales according to multiline)
+                step = height / len(lines)
+                # For each line, draw it
+                for i, line in enumerate(lines):
+                    # cfr. https://doc.qt.io/qtforpython-5/PySide2/QtGui/QPainterPath.html#PySide2.QtGui.PySide2.QtGui.QPainterPath.addText
+                    # Text is drawn from the base of the font, which is not in the middle of the bounding box
+                    # By default Pillow adds a bounding box margin of 4 pixels, so we subtract that from the edge coordinate
+                    # to get the correct height to draw the text.
+                    # Then we subtract i*step which is basically "which line number should this text be on"
+                    path.addText(text_rect.bottomLeft().x(), text_rect.bottomLeft().y() - 4 - i*step, font, line)
                 painter.strokePath(path, pen)
                 painter.fillPath(path, brush)
 
             else:
-                painter.drawText(text_rect, Qt.AlignHCenter | Qt.AlignVCenter, text)
+                painter.drawText(text_rect, Qt.AlignHCenter | Qt.AlignVCenter, text_template.text_value)
 
         painter.end()
 
@@ -423,6 +442,7 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__(*args, **kwargs)
 
         self.setWindowTitle(f"Animator")
+        self.new_sequence = None
         self.original_sequence = sequence
         self.meme_template = meme_template
         self.selected_text_template = meme_template.templates_list[0]
@@ -473,6 +493,11 @@ class MainWindow(QMainWindow):
         saveAction.setStatusTip('Save animation data to a JSON file')
         saveAction.triggered.connect(self.on_click_save)
 
+        exportAction = QAction("&Export as gif", self)
+        exportAction.setShortcut("Ctrl+E")
+        exportAction.setStatusTip('Export project as gif')
+        exportAction.triggered.connect(self.on_click_export)
+
         resetAllAction = QAction("&Reset all animation data", self)
         resetAllAction.setShortcut("Ctrl+R")
         resetAllAction.setStatusTip('Reset animation data in all text templates')
@@ -482,6 +507,7 @@ class MainWindow(QMainWindow):
         fileMenu = mainMenu.addMenu('&File')
         fileMenu.addAction(saveAction)
         fileMenu.addAction(loadAction)
+        fileMenu.addAction(exportAction)
         fileMenu = mainMenu.addMenu('&Animation')
         fileMenu.addAction(resetAllAction)
 
@@ -517,6 +543,9 @@ class MainWindow(QMainWindow):
         main_widget.setLayout(main_layout)
 
         self.setCentralWidget(main_widget)
+
+        # Trigger the initial refresh
+        self.selected_text_template_changed.emit(self.meme_template.templates_list[0].id)
 
     def on_click_delete_current_text_template(self):
         if len(self.meme_template.templates_list) > 1:
@@ -563,7 +592,7 @@ class MainWindow(QMainWindow):
         # rendered_sequence = self.meme_template.render(sequence=self.sequence,
         #                                               render_options=self.render_options)
         file_path, _ = QFileDialog.getSaveFileName(self, 'Save Template as',
-                                                   'c:\\', "JSON file (*.json)")
+                                                   str(Path.home()), "JSON file (*.json)")
         if file_path:
             with open(file_path, mode='w') as f:
                 json.dump(self.meme_template.serialize(), fp=f, indent=4)
@@ -580,13 +609,13 @@ class MainWindow(QMainWindow):
     @QtCore.pyqtSlot()
     def on_click_load(self):
         file_path, _ = QFileDialog.getOpenFileName(self, 'Load Animation',
-                                                   'c:\\', "GIF file (*.gif)")
+                                                   str(Path.home()), "GIF file (*.gif)")
         if os.path.isfile(file_path):
             gif_path = Path(file_path)
             json_path = gif_path.with_suffix(".json")
 
-            new_sequence = GifSequence.open(str(gif_path), method="mpy")
-            self.load_new_sequence(new_sequence)
+            self.new_sequence = GifSequence.open(str(gif_path), method="mpy")
+            self.load_new_sequence(self.new_sequence)
             self.statusBar().showMessage(f'Loaded {file_path}')
 
             if json_path.exists():
@@ -595,6 +624,25 @@ class MainWindow(QMainWindow):
             self.setWindowTitle(f"Animator - {gif_path.name}")
         else:
             self.statusBar().showMessage(f'File does not exists')
+    
+    @QtCore.pyqtSlot()
+    def on_click_export(self):
+        if self.new_sequence:
+            gif = self.new_sequence
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, 'Save animation as', str(Path.home()), "GIF file (*.gif)"
+            )
+            self.meme_template.render(gif, self.meme_template.templates_dict.keys()).save(file_path, is_loop=True)
+            dlg = QMessageBox(self)
+            dlg.setWindowTitle("Done!")
+            dlg.setText(f"The gif was successfully rendered to {file_path}")
+            dlg.exec()
+        else:
+            dlg = QMessageBox(self)
+            dlg.setWindowTitle("Error!")
+            dlg.setText(f"Not a valid gif.")
+            dlg.exec()
+
 
     @QtCore.pyqtSlot()
     def on_click_reset(self):

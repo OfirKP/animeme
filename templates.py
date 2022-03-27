@@ -28,22 +28,23 @@ class TextAnimationTemplate(AnimationTemplate):
             self.keyframes.insert_keyframe(TextAnimationKeyframe(frame_ind=0,
                                                                  position=initial_position,
                                                                  text_size=initial_text_size))
+        self.text_value = self.id
         self.font_path = 'Montserrat-Regular.ttf'
         self.text_color: str = "#FFF"
         self.background_color: Optional[Tuple] = None
-        self.stroke_width: int = 0
+        self.stroke_width: int = 2
         self.stroke_color: str = "#000"
 
-    def render(self, sequence: GifSequence, content: str):
+    def render(self, sequence: GifSequence):
         rendered_frames = []
         for frame_ind, frame in enumerate(sequence):
-            rendered_frames.append(self.render_frame(sequence=sequence, frame_ind=frame_ind, content=content))
+            rendered_frames.append(self.render_frame(sequence=sequence, frame_ind=frame_ind))
         return GifSequence.from_frames(rendered_frames)
 
-    def render_frame(self, sequence: GifSequence, frame_ind: int, content: str, inplace: bool = False) -> GifFrame:
+    def render_frame(self, sequence: GifSequence, frame_ind: int, inplace: bool = False) -> GifFrame:
         current_state: TextAnimationKeyframe = self.keyframes.interpolate(frame_ind=frame_ind)
         image = sequence[frame_ind].to_image()
-        self._draw_outlined_text(image, position=current_state.position, content=content,
+        self._draw_outlined_text(image, position=current_state.position, content=self.text_value,
                                  font=ImageFont.truetype(self.font_path, size=current_state.text_size),
                                  background_color=self.background_color,
                                  stroke_width=self.stroke_width,
@@ -108,7 +109,8 @@ class TextAnimationTemplate(AnimationTemplate):
 
         # Draw inner white text
         draw.multiline_text((x, y), content, self.text_color,
-                            font=font, align='center', stroke_width=stroke_width, stroke_fill=stroke_color)
+                            font=font, align='center',
+                            stroke_width=stroke_width, stroke_fill=stroke_color)
 
         image.paste(overlay, None, overlay)
 
@@ -130,9 +132,9 @@ class MemeAnimationTemplate:
     def templates_list(self) -> List[TextAnimationTemplate]:
         return list(self.templates_dict.values())
 
-    def render(self, sequence: GifSequence, render_options: Dict[str, str]) -> GifSequence:
-        for template_id, content in render_options.items():
-            sequence = self.templates_dict[template_id].render(sequence=sequence, content=content)
+    def render(self, sequence: GifSequence, templates: List[str]) -> GifSequence:
+        for template_id in templates:
+            sequence = self.templates_dict[template_id].render(sequence=sequence)
         return sequence
 
     @staticmethod
