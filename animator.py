@@ -10,7 +10,7 @@ from PyQt5.QtCore import Qt, pyqtSignal as Signal, QRect
 from PyQt5.QtGui import QPixmap, QPainter, QPen, QColor, QPaintEvent, QMouseEvent, QPainterPath
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QSlider, QVBoxLayout, QWidget, QPushButton, QGridLayout, \
     QGroupBox, QFormLayout, QLineEdit, QHBoxLayout, QFileDialog, QAction, QComboBox, QSizePolicy, QStyle, QRubberBand, \
-    QColorDialog, QPlainTextEdit
+    QColorDialog, QPlainTextEdit, QMessageBox
 
 from gif import GifSequence, GifFrame
 from keyframes import TextAnimationKeyframe
@@ -442,6 +442,7 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__(*args, **kwargs)
 
         self.setWindowTitle(f"Animator")
+        self.new_sequence = None
         self.original_sequence = sequence
         self.meme_template = meme_template
         self.selected_text_template = meme_template.templates_list[0]
@@ -492,6 +493,11 @@ class MainWindow(QMainWindow):
         saveAction.setStatusTip('Save animation data to a JSON file')
         saveAction.triggered.connect(self.on_click_save)
 
+        exportAction = QAction("&Export as gif", self)
+        exportAction.setShortcut("Ctrl+E")
+        exportAction.setStatusTip('Export project as gif')
+        exportAction.triggered.connect(self.on_click_export)
+
         resetAllAction = QAction("&Reset all animation data", self)
         resetAllAction.setShortcut("Ctrl+R")
         resetAllAction.setStatusTip('Reset animation data in all text templates')
@@ -501,6 +507,7 @@ class MainWindow(QMainWindow):
         fileMenu = mainMenu.addMenu('&File')
         fileMenu.addAction(saveAction)
         fileMenu.addAction(loadAction)
+        fileMenu.addAction(exportAction)
         fileMenu = mainMenu.addMenu('&Animation')
         fileMenu.addAction(resetAllAction)
 
@@ -607,8 +614,8 @@ class MainWindow(QMainWindow):
             gif_path = Path(file_path)
             json_path = gif_path.with_suffix(".json")
 
-            new_sequence = GifSequence.open(str(gif_path), method="mpy")
-            self.load_new_sequence(new_sequence)
+            self.new_sequence = GifSequence.open(str(gif_path), method="mpy")
+            self.load_new_sequence(self.new_sequence)
             self.statusBar().showMessage(f'Loaded {file_path}')
 
             if json_path.exists():
@@ -617,6 +624,25 @@ class MainWindow(QMainWindow):
             self.setWindowTitle(f"Animator - {gif_path.name}")
         else:
             self.statusBar().showMessage(f'File does not exists')
+    
+    @QtCore.pyqtSlot()
+    def on_click_export(self):
+        if self.new_sequence:
+            gif = self.new_sequence
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, 'Save animation as', str(Path.home()), "GIF file (*.gif)"
+            )
+            self.meme_template.render(gif, self.meme_template.templates_dict.keys()).save(file_path, is_loop=True)
+            dlg = QMessageBox(self)
+            dlg.setWindowTitle("Done!")
+            dlg.setText(f"The gif was successfully rendered to {file_path}")
+            dlg.exec()
+        else:
+            dlg = QMessageBox(self)
+            dlg.setWindowTitle("Error!")
+            dlg.setText(f"Not a valid gif.")
+            dlg.exec()
+
 
     @QtCore.pyqtSlot()
     def on_click_reset(self):
