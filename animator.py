@@ -585,7 +585,7 @@ class MainWindow(QMainWindow):
         # rendered_sequence = self.meme_template.render(sequence=self.sequence,
         #                                               render_options=self.render_options)
         file_path, _ = QFileDialog.getSaveFileName(self, 'Save Template as',
-                                                   'c:\\', "JSON file (*.json)")
+                                                   str(Path.home()), "JSON file (*.json)")
         if file_path:
             with open(file_path, mode='w') as f:
                 json.dump(self.meme_template.serialize(), fp=f, indent=4)
@@ -602,7 +602,7 @@ class MainWindow(QMainWindow):
     @QtCore.pyqtSlot()
     def on_click_load(self):
         file_path, _ = QFileDialog.getOpenFileName(self, 'Load Animation',
-                                                   'c:\\', "GIF file (*.gif)")
+                                                   str(Path.home()), "GIF file (*.gif)")
         if os.path.isfile(file_path):
             gif_path = Path(file_path)
             json_path = gif_path.with_suffix(".json")
