@@ -32,7 +32,7 @@ class TextAnimationTemplate(AnimationTemplate):
         self.font_path = 'Montserrat-Regular.ttf'
         self.text_color: str = "#FFF"
         self.background_color: Optional[Tuple] = None
-        self.stroke_width: int = 0
+        self.stroke_width: int = 2
         self.stroke_color: str = "#000"
 
     def render(self, sequence: GifSequence, content: str):
