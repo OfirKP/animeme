@@ -408,7 +408,20 @@ class FramesViewer(QLabel):
                 painter.setPen(pen)
 
                 path = QPainterPath()
-                path.addText(text_rect.bottomLeft(), font, text_template.text_value)
+                # Split multiline text
+                lines = text_template.text_value.split('\n')
+                # Reverse it so when multiline, the first line is on top
+                lines.reverse()
+                # Split up the height of the bounding box (which already correctly scales according to multiline)
+                step = height / len(lines)
+                # For each line, draw it
+                for i, line in enumerate(lines):
+                    # cfr. https://doc.qt.io/qtforpython-5/PySide2/QtGui/QPainterPath.html#PySide2.QtGui.PySide2.QtGui.QPainterPath.addText
+                    # Text is drawn from the base of the font, which is not in the middle of the bounding box
+                    # By default Pillow adds a bounding box margin of 4 pixels, so we subtract that from the edge coordinate
+                    # to get the correct height to draw the text.
+                    # Then we subtract i*step which is basically "which line number should this text be on"
+                    path.addText(text_rect.bottomLeft().x(), text_rect.bottomLeft().y() - 4 - i*step, font, line)
                 painter.strokePath(path, pen)
                 painter.fillPath(path, brush)
 
