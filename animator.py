@@ -8,9 +8,9 @@ import qimage2ndarray
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtCore import Qt, pyqtSignal as Signal, QRect
 from PyQt5.QtGui import QPixmap, QPainter, QPen, QColor, QPaintEvent, QMouseEvent, QPainterPath
-from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QSlider, QVBoxLayout, QWidget, QPushButton, QGridLayout, \
-    QGroupBox, QFormLayout, QLineEdit, QHBoxLayout, QFileDialog, QAction, QComboBox, QSizePolicy, QStyle, QRubberBand, \
-    QColorDialog, QPlainTextEdit, QMessageBox
+from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QSlider, QVBoxLayout, QWidget, QPushButton, \
+    QGridLayout, QGroupBox, QFormLayout, QLineEdit, QHBoxLayout, QFileDialog, QAction, QComboBox, QSizePolicy, \
+    QStyle, QRubberBand, QColorDialog, QPlainTextEdit, QMessageBox
 
 from gif import GifSequence, GifFrame
 from keyframes import TextAnimationKeyframe
@@ -38,7 +38,7 @@ class TemplateSelectionPanel(QWidget):
         vbox.addWidget(self.combo)
 
     def on_combo_change(self, template_id: str):
-        self.parent.changeSelectedTextTemplate(template_id)
+        self.parent.change_selected_text_template(template_id)
 
     def refresh_selector(self):
         self.combo.clear()
@@ -61,9 +61,9 @@ class ColorButton(QPushButton):
         self.setObjectName("ColorButton")
         self._color = None
         self.setMaximumWidth(32)
-        self.pressed.connect(self.onColorPicker)
+        self.pressed.connect(self.on_color_picker)
 
-    def setColor(self, color: Optional[QColor]):
+    def set_color(self, color: Optional[QColor]):
         if color != self._color:
             self._color = color
 
@@ -75,7 +75,7 @@ class ColorButton(QPushButton):
     def color(self):
         return self._color
 
-    def onColorPicker(self):
+    def on_color_picker(self):
         """
         Show color-picker dialog to select color.
 
@@ -87,12 +87,12 @@ class ColorButton(QPushButton):
             dlg.setCurrentColor(QColor(self._color))
 
         if dlg.exec_():
-            self.setColor(dlg.currentColor())
+            self.set_color(dlg.currentColor())
             self.colorChangedFromDialog.emit()
 
     def mousePressEvent(self, e):
         if e.button() == Qt.RightButton:
-            self.setColor(None)
+            self.set_color(None)
             self.colorChangedFromDialog.emit()
 
         return super().mousePressEvent(e)
@@ -110,18 +110,18 @@ class TextTemplatePropertiesPanel(QWidget):
         layout = QGridLayout()
         self.setLayout(layout)
 
-        groupBox = QGroupBox("Text Template Properties")
-        layout.addWidget(groupBox)
+        group_box = QGroupBox("Text Template Properties")
+        layout.addWidget(group_box)
 
         self.textColorButton = ColorButton()
 
-        self.textColorButton.setColor(QColor("white"))
+        self.textColorButton.set_color(QColor("white"))
         self.backgroundColorButton = ColorButton()
         self.strokeWidthEdit = QLineEdit()
         self.yEdit = QLineEdit()
         self.textValue = QPlainTextEdit()
         self.strokeColorButton = ColorButton()
-        self.strokeColorButton.setColor(QColor("black"))
+        self.strokeColorButton.set_color(QColor("black"))
 
         self.strokeWidthEdit.setText("2")
 
@@ -137,15 +137,15 @@ class TextTemplatePropertiesPanel(QWidget):
         layout.addRow(QLabel("Background Color"), self.backgroundColorButton)
         layout.addRow(QLabel("Stroke"), self.strokeWidthEdit)
         layout.addRow(QLabel("Stroke Color"), self.strokeColorButton)
-        groupBox.setLayout(layout)
+        group_box.setLayout(layout)
 
     def refresh(self):
         text_template = self.parent.selected_text_template
         self.textValue.setPlainText(str(text_template.text_value))
-        self.textColorButton.setColor(QColor(text_template.text_color) if text_template.text_color else None)
-        self.backgroundColorButton.setColor(QColor(text_template.background_color)
-                                            if text_template.background_color else None)
-        self.strokeColorButton.setColor(QColor(text_template.stroke_color) if text_template.stroke_color else None)
+        self.textColorButton.set_color(QColor(text_template.text_color) if text_template.text_color else None)
+        self.backgroundColorButton.set_color(QColor(text_template.background_color)
+                                             if text_template.background_color else None)
+        self.strokeColorButton.set_color(QColor(text_template.stroke_color) if text_template.stroke_color else None)
         self.strokeWidthEdit.setText(str(text_template.stroke_width))
 
     def on_editing_finished(self):
@@ -183,8 +183,8 @@ class FramePropertiesPanel(QWidget):
         layout = QGridLayout()
         self.setLayout(layout)
 
-        groupBox = QGroupBox("Frame Properties")
-        layout.addWidget(groupBox)
+        group_box = QGroupBox("Frame Properties")
+        layout.addWidget(group_box)
 
         self.toggleKeyframeButton = QPushButton('Add Keyframe')
         self.toggleKeyframeButton.setCheckable(True)
@@ -206,7 +206,7 @@ class FramePropertiesPanel(QWidget):
         layout.addRow(QLabel("x:"), self.xEdit)
         layout.addRow(QLabel("y:"), self.yEdit)
         layout.addRow(QLabel("Text Size:"), self.textSizeEdit)
-        groupBox.setLayout(layout)
+        group_box.setLayout(layout)
 
     def on_editing_finished(self):
         if self.is_enabled:
@@ -249,14 +249,14 @@ class FramePropertiesPanel(QWidget):
         keyframes_collection = self.parent.selected_text_template.keyframes
         if frame_num in keyframes_collection.keyframes_frames_indices:
             keyframe = keyframes_collection.get_keyframe(frame_num)
-            self.updateForm(frame_ind=frame_num, x=keyframe.x, y=keyframe.y, text_size=keyframe.text_size)
+            self.update_form(frame_ind=frame_num, x=keyframe.x, y=keyframe.y, text_size=keyframe.text_size)
             self.toggleKeyframeButton.setChecked(True)
             self.toggleKeyframeButton.setText("Remove Keyframe")
             self.enable()
         else:
             self.disable()
             keyframe = keyframes_collection.interpolate(frame_ind=frame_num)
-            self.updateForm(frame_ind=frame_num, x=keyframe.x, y=keyframe.y, text_size=keyframe.text_size)
+            self.update_form(frame_ind=frame_num, x=keyframe.x, y=keyframe.y, text_size=keyframe.text_size)
             self.toggleKeyframeButton.setChecked(False)
             self.toggleKeyframeButton.setText("Add Keyframe")
 
@@ -274,7 +274,7 @@ class FramePropertiesPanel(QWidget):
         self.textSizeEdit.setEnabled(True)
         self.is_enabled = True
 
-    def updateForm(self, frame_ind: int, x: int, y: int, text_size: int):
+    def update_form(self, frame_ind: int, x: int, y: int, text_size: int):
         self.frameEdit.setText(str(frame_ind) if frame_ind is not None else "")
         self.xEdit.setText(str(x) if x is not None else "")
         self.yEdit.setText(str(y) if y is not None else "")
@@ -331,14 +331,14 @@ class FramesViewer(QLabel):
         super().__init__(*args, **kwargs)
         self.parent = parent
         self.pixmaps = []
-        self.loadSequence(sequence)
+        self.load_sequence(sequence)
         self.selected_frame_ind = 0
         self.text_template_to_rect = {}
         self.rubberBand = QRubberBand(QRubberBand.Rectangle, self)
         self.rubberBand.show()
         self.setPixmap(self.pixmaps[self.selected_frame_ind])
 
-    def loadSequence(self, sequence: GifSequence):
+    def load_sequence(self, sequence: GifSequence):
         self.pixmaps = [QPixmap.fromImage(qimage2ndarray.array2qimage(frame.array)) for frame in sequence]
 
     def mousePressEvent(self, e: QMouseEvent):
@@ -346,7 +346,7 @@ class FramesViewer(QLabel):
             if text_template.id in self.text_template_to_rect \
                     and text_template.id != self.parent.selected_text_template.id \
                     and self.text_template_to_rect[text_template.id].contains(e.pos()):
-                self.parent.changeSelectedTextTemplate(text_template.id)
+                self.parent.change_selected_text_template(text_template.id)
                 self.update()
                 return
 
@@ -418,7 +418,8 @@ class FramesViewer(QLabel):
                 for i, line in enumerate(lines):
                     # cfr. https://doc.qt.io/qtforpython-5/PySide2/QtGui/QPainterPath.html#PySide2.QtGui.PySide2.QtGui.QPainterPath.addText
                     # Text is drawn from the base of the font, which is not in the middle of the bounding box
-                    # By default Pillow adds a bounding box margin of 4 pixels, so we subtract that from the edge coordinate
+                    # By default Pillow adds a bounding box margin of 4 pixels, so we subtract that from the edge
+                    # coordinate
                     # to get the correct height to draw the text.
                     # Then we subtract i*step which is basically "which line number should this text be on"
                     path.addText(text_rect.bottomLeft().x(), text_rect.bottomLeft().y() - 4 - i*step, font, line)
@@ -483,33 +484,33 @@ class MainWindow(QMainWindow):
         self.reset_button.clicked.connect(lambda _: self.frame_properties_panel.on_selected_frame_change())
         self.reset_button.clicked.connect(self.frames_viewer.update)
 
-        loadAction = QAction("&Load animation", self)
-        loadAction.setShortcut("Ctrl+O")
-        loadAction.setStatusTip('Load animation and existing template data if possible')
-        loadAction.triggered.connect(self.on_click_load)
+        load_action = QAction("&Load animation", self)
+        load_action.setShortcut("Ctrl+O")
+        load_action.setStatusTip('Load animation and existing template data if possible')
+        load_action.triggered.connect(self.on_click_load)
 
-        saveAction = QAction("&Save template as", self)
-        saveAction.setShortcut("Ctrl+S")
-        saveAction.setStatusTip('Save animation data to a JSON file')
-        saveAction.triggered.connect(self.on_click_save)
+        save_action = QAction("&Save template as", self)
+        save_action.setShortcut("Ctrl+S")
+        save_action.setStatusTip('Save animation data to a JSON file')
+        save_action.triggered.connect(self.on_click_save)
 
-        exportAction = QAction("&Export as gif", self)
-        exportAction.setShortcut("Ctrl+E")
-        exportAction.setStatusTip('Export project as gif')
-        exportAction.triggered.connect(self.on_click_export)
+        export_action = QAction("&Export as gif", self)
+        export_action.setShortcut("Ctrl+E")
+        export_action.setStatusTip('Export project as gif')
+        export_action.triggered.connect(self.on_click_export)
 
-        resetAllAction = QAction("&Reset all animation data", self)
-        resetAllAction.setShortcut("Ctrl+R")
-        resetAllAction.setStatusTip('Reset animation data in all text templates')
-        resetAllAction.triggered.connect(self.on_click_reset_all)
+        reset_all_action = QAction("&Reset all animation data", self)
+        reset_all_action.setShortcut("Ctrl+R")
+        reset_all_action.setStatusTip('Reset animation data in all text templates')
+        reset_all_action.triggered.connect(self.on_click_reset_all)
 
-        mainMenu = self.menuBar()
-        fileMenu = mainMenu.addMenu('&File')
-        fileMenu.addAction(saveAction)
-        fileMenu.addAction(loadAction)
-        fileMenu.addAction(exportAction)
-        fileMenu = mainMenu.addMenu('&Animation')
-        fileMenu.addAction(resetAllAction)
+        main_menu = self.menuBar()
+        file_menu = main_menu.addMenu('&File')
+        file_menu.addAction(save_action)
+        file_menu.addAction(load_action)
+        file_menu.addAction(export_action)
+        file_menu = main_menu.addMenu('&Animation')
+        file_menu.addAction(reset_all_action)
 
         self.template_selection_panel = TemplateSelectionPanel(self)
         self.selected_text_template_changed.connect(
@@ -551,29 +552,29 @@ class MainWindow(QMainWindow):
         if len(self.meme_template.templates_list) > 1:
             template_id = self.selected_text_template.id
             self.meme_template.remove_template(self.selected_text_template)
-            self.changeSelectedTextTemplate(self.meme_template.templates_list[0].id)
+            self.change_selected_text_template(self.meme_template.templates_list[0].id)
             del self.render_options[template_id]
 
     def on_click_add_text_template(self):
         initial_template_id = f"Text {1 + len(self.meme_template.templates_list)}"
         self.meme_template.add_template(TextAnimationTemplate(template_id=initial_template_id))
         self.render_options[initial_template_id] = initial_template_id
-        self.changeSelectedTextTemplate(initial_template_id)
+        self.change_selected_text_template(initial_template_id)
 
-    def changeSelectedTextTemplate(self, template_id: str):
+    def change_selected_text_template(self, template_id: str):
         self.selected_text_template = self.meme_template[template_id]
         self.selected_text_template_changed.emit(template_id)
 
     def load_new_sequence(self, sequence: GifSequence):
         self.original_sequence = sequence
         self.frames_slider.setMaximum(len(self.original_sequence) - 1)
-        self.frames_viewer.loadSequence(sequence)
+        self.frames_viewer.load_sequence(sequence)
         self.frames_viewer.handle_frame_update(frame_ind=self.current_frame_index)
 
     def load_animation_data(self, serialized_meme_template: List):
         self.meme_template = MemeAnimationTemplate.deserialize(serialized_meme_template=serialized_meme_template)
         self.render_options = {key: key for key in self.meme_template.templates_dict.keys()}
-        self.changeSelectedTextTemplate(self.meme_template.templates_list[0].id)
+        self.change_selected_text_template(self.meme_template.templates_list[0].id)
         self.frame_properties_panel.on_selected_frame_change()
 
     @QtCore.pyqtSlot(int)
@@ -599,7 +600,7 @@ class MainWindow(QMainWindow):
             gif_path = Path(file_path).with_suffix(".gif")
             try:
                 self.original_sequence.save(str(gif_path), is_loop=True)
-            except PermissionError as e:
+            except PermissionError:
                 self.statusBar().showMessage(f"PermissionError: Couldn't save file to this location")
 
             self.statusBar().showMessage(f'Saved template to {file_path} and {gif_path}')
@@ -642,7 +643,6 @@ class MainWindow(QMainWindow):
             dlg.setWindowTitle("Error!")
             dlg.setText(f"Not a valid gif.")
             dlg.exec()
-
 
     @QtCore.pyqtSlot()
     def on_click_reset(self):

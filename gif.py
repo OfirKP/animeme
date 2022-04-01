@@ -245,4 +245,3 @@ if __name__ == '__main__':
     print(len(seq_short))
     seq_short.show()
     seq_short.save('modified_output.gif')
-

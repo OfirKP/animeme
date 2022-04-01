@@ -13,7 +13,7 @@ class AnimationTemplate(ABC):
     __slots__ = 'keyframes',
 
     @abstractmethod
-    def render(self, sequence: GifSequence, content):
+    def render(self, sequence: GifSequence):
         raise NotImplementedError
 
 
@@ -90,7 +90,7 @@ class TextAnimationTemplate(AnimationTemplate):
                             image: Image,
                             position: Tuple[int, int],
                             content: str,
-                            font: ImageFont.ImageFont,
+                            font: ImageFont.FreeTypeFont,
                             background_color: Optional[Union[Tuple, str]] = None,
                             stroke_width: int = 0,
                             stroke_color: Union[Tuple, str] = "#000"):
@@ -161,7 +161,6 @@ class MemeAnimationTemplate:
             for template_id, content in render_options.items():
                 self.templates_dict[template_id].render_frame(sequence=sequence,
                                                               frame_ind=frame_ind,
-                                                              content=content,
                                                               inplace=True)
 
     def serialize(self) -> List[dict]:
@@ -177,17 +176,17 @@ class MemeAnimationTemplate:
 
 
 if __name__ == '__main__':
-    template = TextAnimationTemplate("Text", initial_position=(50, 50), initial_text_size=30)
+    t_template = TextAnimationTemplate("Text", initial_position=(50, 50), initial_text_size=30)
 
     # keyframe1 = TextAnimationKeyframe(frame_ind=3, position=(80, 100))
     # keyframe2 = TextAnimationKeyframe(frame_ind=7, position=(150, 50))
     # keyframe3 = TextAnimationKeyframe(frame_ind=10, position=(50, 50))
-    # template.keyframes.insert_keyframe(keyframe1)
-    # template.keyframes.insert_keyframe(keyframe2)
-    # template.keyframes.insert_keyframe(keyframe3)
+    # t_template.keyframes.insert_keyframe(keyframe1)
+    # t_template.keyframes.insert_keyframe(keyframe2)
+    # t_template.keyframes.insert_keyframe(keyframe3)
 
     gif = GifSequence.open('tenor.gif')
     print(len(gif))
-    rendered = template.render(gif, "Hello World!")
+    rendered = t_template.render(gif)
     rendered.show()
     rendered.save("hello_world2.gif")
