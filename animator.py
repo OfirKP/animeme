@@ -657,6 +657,12 @@ class MainWindow(QMainWindow):
             text_template.keyframes.reset()
         self.frames_viewer.update()
 
+    def keyPressEvent(self, e):
+        if e.key() == Qt.Key_L:
+            self.frames_slider.setValue(self.current_frame_index + 1)
+        elif e.key() == Qt.Key_J:
+            self.frames_slider.setValue(self.current_frame_index - 1)
+
 
 if __name__ == '__main__':
     app = QApplication([])
