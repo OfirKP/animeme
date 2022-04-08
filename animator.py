@@ -525,7 +525,7 @@ class MainWindow(QMainWindow):
 
         left_layout.addWidget(self.frames_viewer)
         left_layout.addWidget(self.frames_slider)
-        left_layout.addWidget(self.keyframes_indicator)
+        # left_layout.addWidget(self.keyframes_indicator)
         left_layout.addWidget(self.template_selection_panel)
         left_layout.addWidget(self.add_text_template_button)
         left_layout.addWidget(self.delete_current_text_template_button)
