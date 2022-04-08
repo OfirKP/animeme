@@ -517,6 +517,7 @@ class MainWindow(QMainWindow):
 
         left_layout.addWidget(self.frames_viewer)
         left_layout.addWidget(self.frames_slider)
+        left_layout.addWidget(self.keyframes_indicator)
         left_layout.addWidget(self.template_selection_panel)
         left_layout.addWidget(self.add_text_template_button)
         left_layout.addWidget(self.delete_current_text_template_button)
@@ -635,7 +636,7 @@ if __name__ == '__main__':
     print(QtGui.QFontDatabase.applicationFontFamilies(_id))
 
     # default_sequence = GifSequence.open("test.gif")
-    default_sequence = GifSequence.from_frames([GifFrame.from_array(array=np.zeros((400, 400)), duration=50)])
+    default_sequence = GifSequence.from_frames(10*[GifFrame.from_array(array=np.zeros((400, 400)), duration=50)])
     default_text_template = TextAnimationTemplate("Text 1")
     default_meme_template = MemeAnimationTemplate(text_templates=[default_text_template])
     window = MainWindow(sequence=default_sequence, meme_template=default_meme_template)
