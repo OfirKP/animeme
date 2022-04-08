@@ -1,6 +1,9 @@
+import time
+
 import numpy as np
 import pytest
 from PyQt5 import QtGui
+from PyQt5.QtCore import QPoint
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QApplication
 from pytestqt.qt_compat import qt_api
@@ -18,7 +21,7 @@ def mainwindow():
     default_text_template = TextAnimationTemplate("Text 1")
     default_meme_template = MemeAnimationTemplate(text_templates=[default_text_template])
     window = MainWindow(sequence=default_sequence, meme_template=default_meme_template)
-    # window.show()
+    window.show()
 
     return window
 
@@ -48,9 +51,23 @@ def test_position_text_template(qtbot, mainwindow):
     # mainwindow.frames_viewer.render(pix)
     correct_default_frame_viewer = QtGui.QImage('test_assets/images/default_frame_viewer.png')
     test_default_frame_viewer = mainwindow.frames_viewer.grab().toImage()
-    test_default_frame_viewer.save("/tmp/test.png", quality=100)
+    test_default_frame_viewer.save("/tmp/test_position_text_template.png", quality=100)
     # screen = QApplication.primaryScreen()
     # screenshot = screen.grabWindow(mainwindow.winId())
     # screenshot.save('test.png', 'png')
 
     assert QtGui.QImage('/tmp/test.png') == correct_default_frame_viewer
+
+
+def test_click_to_select(qtbot, mainwindow):
+    qtbot.addWidget(mainwindow)
+    # Move the default text to somewhere else
+    qtbot.mouseClick(mainwindow.frames_viewer, qt_api.QtCore.Qt.MouseButton.LeftButton, pos=QPoint(300, 300))
+    qtbot.wait(10)
+    # Create new text, should be selected automatically now
+    qtbot.mouseClick(mainwindow.add_text_template_button, qt_api.QtCore.Qt.MouseButton.LeftButton)
+    qtbot.wait(10)
+    # Click on the previous, moved, text and expect it to be selected now, instead of moving the new text
+    qtbot.mouseClick(mainwindow.frames_viewer, qt_api.QtCore.Qt.MouseButton.LeftButton, pos=QPoint(300, 300))
+    qtbot.wait(10)
+    assert mainwindow.selected_text_template.id == 'Text 1'
