@@ -23,6 +23,7 @@ class GifSequence:
         list_of_durations = []
 
         for image in images:
+            # noinspection PyTypeChecker
             list_of_frames.append(np.asarray(image.convert('RGB')))
             list_of_durations.append(image.info['duration'])
 
@@ -158,6 +159,7 @@ class GifFrame:
     __slots__ = '_image', 'duration'
 
     def __init__(self, image: Image.Image):
+        # noinspection PyTypeChecker
         self._image: np.ndarray = np.array(image.convert('RGB'))
         self.duration: int = image.info['duration']
 

@@ -21,7 +21,7 @@ class TemplateSelectionPanel(QWidget):
 
     def __init__(self, parent):
         QWidget.__init__(self)
-        self.parent: MainWindow = parent
+        self.parent = parent
 
         layout = QGridLayout()
         self.setLayout(layout)
@@ -88,11 +88,13 @@ class ColorButton(QPushButton):
 
         if dlg.exec_():
             self.set_color(dlg.currentColor())
+            # noinspection PyUnresolvedReferences
             self.colorChangedFromDialog.emit()
 
     def mousePressEvent(self, e):
         if e.button() == Qt.RightButton:
             self.set_color(None)
+            # noinspection PyUnresolvedReferences
             self.colorChangedFromDialog.emit()
 
         return super().mousePressEvent(e)
@@ -105,7 +107,7 @@ class TextTemplatePropertiesPanel(QWidget):
         super().__init__()
 
         self.is_enabled = False
-        self.parent: MainWindow = parent
+        self.parent = parent
         self.keyframe: Optional[TextAnimationKeyframe] = None
         layout = QGridLayout()
         self.setLayout(layout)
@@ -126,9 +128,12 @@ class TextTemplatePropertiesPanel(QWidget):
         self.strokeWidthEdit.setText("2")
 
         self.textValue.textChanged.connect(self.on_editing_finished)
+        # noinspection PyUnresolvedReferences
         self.textColorButton.colorChangedFromDialog.connect(self.on_editing_finished)
+        # noinspection PyUnresolvedReferences
         self.backgroundColorButton.colorChangedFromDialog.connect(self.on_editing_finished)
         self.strokeWidthEdit.editingFinished.connect(self.on_editing_finished)
+        # noinspection PyUnresolvedReferences
         self.strokeColorButton.colorChangedFromDialog.connect(self.on_editing_finished)
 
         layout = QFormLayout()
@@ -170,6 +175,7 @@ class TextTemplatePropertiesPanel(QWidget):
         except ValueError:
             self.parent.statusBar().showMessage("Invalid properties for template. Please try again.")
 
+        # noinspection PyUnresolvedReferences
         self.text_template_properties_changed.emit()
 
 
@@ -178,7 +184,7 @@ class FramePropertiesPanel(QWidget):
         super().__init__()
 
         self.is_enabled = False
-        self.parent: MainWindow = parent
+        self.parent = parent
         self.keyframe: Optional[TextAnimationKeyframe] = None
         layout = QGridLayout()
         self.setLayout(layout)
@@ -415,12 +421,11 @@ class FramesViewer(QLabel):
                 step = height / len(lines)
                 # For each line, draw it
                 for i, line in enumerate(lines):
-                    # cfr. https://doc.qt.io/qtforpython-5/PySide2/QtGui/QPainterPath.html#PySide2.QtGui.PySide2.QtGui.QPainterPath.addText
-                    # Text is drawn from the base of the font, which is not in the middle of the bounding box
-                    # By default Pillow adds a bounding box margin of 4 pixels, so we subtract that from the edge
-                    # coordinate
-                    # to get the correct height to draw the text.
-                    # Then we subtract i*step which is basically "which line number should this text be on"
+                    # cfr. https://doc.qt.io/qtforpython-5/PySide2/QtGui/QPainterPath.html#PySide2.QtGui.PySide2
+                    # .QtGui.QPainterPath.addText Text is drawn from the base of the font, which is not in the middle
+                    # of the bounding box By default Pillow adds a bounding box margin of 4 pixels, so we subtract
+                    # that from the edge coordinate to get the correct height to draw the text. Then we subtract
+                    # i*step which is basically "which line number should this text be on"
                     path.addText(text_rect.bottomLeft().x(), text_rect.bottomLeft().y() - 4 - i*step, font, line)
                 painter.strokePath(path, pen)
                 painter.fillPath(path, brush)
@@ -442,8 +447,7 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__(*args, **kwargs)
 
         self.setWindowTitle(f"Animator")
-        self.new_sequence = None
-        self.original_sequence = sequence
+        self.sequence = sequence
         self.meme_template = meme_template
         self.selected_text_template = meme_template.templates_list[0]
         self.current_frame_index = 0
@@ -453,20 +457,22 @@ class MainWindow(QMainWindow):
         self.frame_properties_panel.on_selected_frame_change()
 
         self.text_template_properties_panel = TextTemplatePropertiesPanel(parent=self)
+        # noinspection PyUnresolvedReferences
         self.selected_text_template_changed.connect(lambda: self.text_template_properties_panel.refresh())
         # self.frame_properties_panel.toggleKeyframeButton.clicked.connect(self.keyframes_indicator.refresh)
 
         self.frames_slider = QSlider(Qt.Horizontal, self)
         self.frames_slider.setMinimum(0)
-        self.frames_slider.setMaximum(len(self.original_sequence) - 1)
+        self.frames_slider.setMaximum(len(self.sequence) - 1)
         self.frames_slider.setTickPosition(QSlider.TicksBelow)
         self.frames_slider.valueChanged[int].connect(self.on_change_frame)
         self.frames_slider.valueChanged[int].connect(self.frame_properties_panel.on_selected_frame_change)
 
-        self.frames_viewer = FramesViewer(sequence=self.original_sequence, parent=self)
+        self.frames_viewer = FramesViewer(sequence=self.sequence, parent=self)
         self.frames_slider.valueChanged[int].connect(self.frames_viewer.handle_frame_update)
         self.frames_viewer.setCursor(QtGui.QCursor(Qt.CrossCursor))
 
+        # noinspection PyUnresolvedReferences
         self.text_template_properties_panel.text_template_properties_changed.connect(self.frames_viewer.update)
 
         left_side_widget = QWidget()
@@ -479,7 +485,7 @@ class MainWindow(QMainWindow):
 
         self.reset_button = QPushButton('Reset', self)
         self.reset_button.clicked.connect(self.on_click_reset)
-        self.reset_button.clicked.connect(lambda _: self.frame_properties_panel.on_selected_frame_change())
+        self.reset_button.clicked.connect(lambda: self.frame_properties_panel.on_selected_frame_change())
         self.reset_button.clicked.connect(self.frames_viewer.update)
 
         load_action = QAction("&Load animation", self)
@@ -511,12 +517,15 @@ class MainWindow(QMainWindow):
         file_menu.addAction(reset_all_action)
 
         self.template_selection_panel = TemplateSelectionPanel(self)
+        # noinspection PyUnresolvedReferences
         self.selected_text_template_changed.connect(
             lambda _: self.frame_properties_panel.on_selected_frame_change()
         )
+        # noinspection PyUnresolvedReferences
         self.selected_text_template_changed.connect(
             lambda _: self.template_selection_panel.refresh_selector()
         )
+        # noinspection PyUnresolvedReferences
         self.selected_text_template_changed.connect(
             lambda _: self.frames_viewer.update()
         )
@@ -544,11 +553,11 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(main_widget)
 
         # Trigger the initial refresh
+        # noinspection PyUnresolvedReferences
         self.selected_text_template_changed.emit(self.meme_template.templates_list[0].id)
 
     def on_click_delete_current_text_template(self):
         if len(self.meme_template.templates_list) > 1:
-            template_id = self.selected_text_template.id
             self.meme_template.remove_template(self.selected_text_template)
             self.change_selected_text_template(self.meme_template.templates_list[0].id)
 
@@ -559,11 +568,12 @@ class MainWindow(QMainWindow):
 
     def change_selected_text_template(self, template_id: str):
         self.selected_text_template = self.meme_template[template_id]
+        # noinspection PyUnresolvedReferences
         self.selected_text_template_changed.emit(template_id)
 
     def load_new_sequence(self, sequence: GifSequence):
-        self.original_sequence = sequence
-        self.frames_slider.setMaximum(len(self.original_sequence) - 1)
+        self.sequence = sequence
+        self.frames_slider.setMaximum(len(self.sequence) - 1)
         self.frames_viewer.load_sequence(sequence)
         self.frames_viewer.handle_frame_update(frame_ind=self.current_frame_index)
 
@@ -592,7 +602,7 @@ class MainWindow(QMainWindow):
                 json.dump(self.meme_template.serialize(), fp=f, indent=4)
             gif_path = Path(file_path).with_suffix(".gif")
             try:
-                self.original_sequence.save(str(gif_path), is_loop=True)
+                self.sequence.save(str(gif_path), is_loop=True)
             except PermissionError:
                 self.statusBar().showMessage(f"PermissionError: Couldn't save file to this location")
 
@@ -608,8 +618,8 @@ class MainWindow(QMainWindow):
             gif_path = Path(file_path)
             json_path = gif_path.with_suffix(".json")
 
-            self.new_sequence = GifSequence.open(str(gif_path), method="mpy")
-            self.load_new_sequence(self.new_sequence)
+            new_sequence = GifSequence.open(str(gif_path), method="mpy")
+            self.load_new_sequence(new_sequence)
             self.statusBar().showMessage(f'Loaded {file_path}')
 
             if json_path.exists():
@@ -621,12 +631,12 @@ class MainWindow(QMainWindow):
     
     @QtCore.pyqtSlot()
     def on_click_export(self):
-        if self.new_sequence:
-            gif = self.new_sequence
+        if self.sequence:
+            gif = self.sequence
             file_path, _ = QFileDialog.getSaveFileName(
                 self, 'Save animation as', str(Path.home()), "GIF file (*.gif)"
             )
-            self.meme_template.render(gif, self.meme_template.templates_dict.keys()).save(file_path, is_loop=True)
+            self.meme_template.render(gif, list(self.meme_template.templates_dict.keys())).save(file_path, is_loop=True)
             dlg = QMessageBox(self)
             dlg.setWindowTitle("Done!")
             dlg.setText(f"The gif was successfully rendered to {file_path}")
@@ -650,7 +660,7 @@ class MainWindow(QMainWindow):
 
 if __name__ == '__main__':
     app = QApplication([])
-    _id = QtGui.QFontDatabase.addApplicationFont("Montserrat-Regular.ttf")    # default_sequence = GifSequence.open("test.gif")
+    _id = QtGui.QFontDatabase.addApplicationFont("Montserrat-Regular.ttf")
     default_sequence = GifSequence.from_frames(10*[GifFrame.from_array(array=np.zeros((400, 400)), duration=50)])
     default_text_template = TextAnimationTemplate("Text 1")
     default_meme_template = MemeAnimationTemplate(text_templates=[default_text_template])

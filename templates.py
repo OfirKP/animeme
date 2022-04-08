@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from functools import lru_cache
-from itertools import cycle, islice
 from typing import Tuple, Optional, List, Dict, Union
 
 from PIL import Image, ImageDraw, ImageFont
@@ -103,9 +102,9 @@ class TextAnimationTemplate(AnimationTemplate):
         draw = ImageDraw.ImageDraw(overlay, 'RGBA')
         if background_color is not None:
             margin = 10
-            draw.rectangle([(x - margin, y - margin),
-                            (x + text_width + 2 * margin, y + text_height + 2 * margin)],
-                           fill=background_color)
+            draw.rectangle(
+                ((x - margin, y - margin), (x + text_width + 2 * margin, y + text_height + 2 * margin)),
+                fill=background_color)
 
         # Draw inner white text
         draw.multiline_text((x, y), content, self.text_color,
@@ -136,32 +135,6 @@ class MemeAnimationTemplate:
         for template_id in templates:
             sequence = self.templates_dict[template_id].render(sequence=sequence)
         return sequence
-
-    @staticmethod
-    def spiral(start_ind: int, length: int):
-        def roundrobin(*iterables):
-            # Recipe credited to George Sakkis
-            num_active = len(iterables)
-            nexts = cycle(iter(it).__next__ for it in iterables)
-            while num_active:
-                try:
-                    for next in nexts:
-                        yield next()
-                except StopIteration:
-                    num_active -= 1
-                    nexts = cycle(islice(nexts, num_active))
-
-        forward = range(start_ind, length)
-        backward = range(start_ind - 1, -1, -1)
-        return roundrobin(forward, backward)
-
-    def render_spiral(self, sequence: GifSequence, render_options: Dict[str, str],
-                      current_ind: int):
-        for frame_ind in self.spiral(start_ind=current_ind, length=len(sequence)):
-            for template_id, content in render_options.items():
-                self.templates_dict[template_id].render_frame(sequence=sequence,
-                                                              frame_ind=frame_ind,
-                                                              inplace=True)
 
     def serialize(self) -> List[dict]:
         return [template.serialize() for template in self.templates_dict.values()]
