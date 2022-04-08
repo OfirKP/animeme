@@ -372,10 +372,9 @@ class FramesViewer(QLabel):
 
         font = QtGui.QFont()
         font.setFamily('Montserrat')
-        self.text_template_to_rect = {}
+        self.text_template_to_rect = []
 
-        for template_id, text in self.parent.render_options.items():
-            text_template = self.parent.meme_template[template_id]
+        for text_template in self.parent.meme_template.templates_list:
             pen.setColor(QtGui.QColor(text_template.text_color))
             painter.setPen(pen)
 
@@ -388,13 +387,13 @@ class FramesViewer(QLabel):
                                                                       font_size=keyframe.text_size,
                                                                       text=text_template.text_value)
             text_rect = QRect(x, y, width, height)
-            self.text_template_to_rect[template_id] = text_rect
+            self.text_template_to_rect.append(text_rect)
 
             background_rect = None
             if text_template.background_color is not None:
                 background_rect = text_rect.adjusted(-margin, -margin, margin, margin)
                 painter.fillRect(background_rect, QColor(text_template.background_color))
-            if template_id == self.parent.selected_text_template.id:
+            if text_template.id == self.parent.selected_text_template.id:
                 rubber_rect = background_rect if background_rect is not None else text_rect
                 self.rubberBand.setGeometry(rubber_rect)
 
@@ -447,7 +446,6 @@ class MainWindow(QMainWindow):
         self.original_sequence = sequence
         self.meme_template = meme_template
         self.selected_text_template = meme_template.templates_list[0]
-        self.render_options = {key: key for key in self.meme_template.templates_dict.keys()}
         self.current_frame_index = 0
 
         # self.keyframes_indicator = KeyframesIndicator(self)
@@ -455,7 +453,7 @@ class MainWindow(QMainWindow):
         self.frame_properties_panel.on_selected_frame_change()
 
         self.text_template_properties_panel = TextTemplatePropertiesPanel(parent=self)
-        self.selected_text_template_changed.connect(lambda _: self.text_template_properties_panel.refresh())
+        self.selected_text_template_changed.connect(lambda: self.text_template_properties_panel.refresh())
         # self.frame_properties_panel.toggleKeyframeButton.clicked.connect(self.keyframes_indicator.refresh)
 
         self.frames_slider = QSlider(Qt.Horizontal, self)
@@ -514,13 +512,13 @@ class MainWindow(QMainWindow):
 
         self.template_selection_panel = TemplateSelectionPanel(self)
         self.selected_text_template_changed.connect(
-            lambda _: self.frame_properties_panel.on_selected_frame_change()
+            lambda: self.frame_properties_panel.on_selected_frame_change()
         )
         self.selected_text_template_changed.connect(
-            lambda _: self.template_selection_panel.refresh_selector()
+            lambda: self.template_selection_panel.refresh_selector()
         )
         self.selected_text_template_changed.connect(
-            lambda _: self.frames_viewer.update()
+            lambda: self.frames_viewer.update()
         )
 
         left_layout.addWidget(self.frames_viewer)
@@ -554,12 +552,10 @@ class MainWindow(QMainWindow):
             template_id = self.selected_text_template.id
             self.meme_template.remove_template(self.selected_text_template)
             self.change_selected_text_template(self.meme_template.templates_list[0].id)
-            del self.render_options[template_id]
 
     def on_click_add_text_template(self):
         initial_template_id = f"Text {1 + len(self.meme_template.templates_list)}"
         self.meme_template.add_template(TextAnimationTemplate(template_id=initial_template_id))
-        self.render_options[initial_template_id] = initial_template_id
         self.change_selected_text_template(initial_template_id)
 
     def change_selected_text_template(self, template_id: str):
@@ -574,7 +570,6 @@ class MainWindow(QMainWindow):
 
     def load_animation_data(self, serialized_meme_template: List):
         self.meme_template = MemeAnimationTemplate.deserialize(serialized_meme_template=serialized_meme_template)
-        self.render_options = {key: key for key in self.meme_template.templates_dict.keys()}
         self.change_selected_text_template(self.meme_template.templates_list[0].id)
         self.frame_properties_panel.on_selected_frame_change()
 

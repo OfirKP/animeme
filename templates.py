@@ -164,7 +164,7 @@ class MemeAnimationTemplate:
                                                               inplace=True)
 
     def serialize(self) -> List[dict]:
-        return [template.serialize() for template in self.templates_list]
+        return [template.serialize() for template in self.templates_dict.values()]
 
     @classmethod
     def deserialize(cls, serialized_meme_template) -> 'MemeAnimationTemplate':
