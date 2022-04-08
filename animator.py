@@ -658,6 +658,9 @@ class MainWindow(QMainWindow):
         self.frames_viewer.update()
 
     def keyPressEvent(self, e):
+        """
+        Add hotkeys
+        """
         if e.key() == Qt.Key_L:
             self.frames_slider.setValue(self.current_frame_index + 1)
         elif e.key() == Qt.Key_J:
