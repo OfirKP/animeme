@@ -479,7 +479,7 @@ class MainWindow(QMainWindow):
         self.delete_current_text_template_button = QPushButton('Delete Current Text Template', self)
         self.delete_current_text_template_button.clicked.connect(self.on_click_delete_current_text_template)
 
-        self.reset_button = QPushButton('Reset', self)
+        self.reset_button = QPushButton('Reset Keyframes', self)
         self.reset_button.clicked.connect(self.on_click_reset)
         self.reset_button.clicked.connect(lambda _: self.frame_properties_panel.on_selected_frame_change())
         self.reset_button.clicked.connect(self.frames_viewer.update)
@@ -658,9 +658,6 @@ class MainWindow(QMainWindow):
 if __name__ == '__main__':
     app = QApplication([])
     _id = QtGui.QFontDatabase.addApplicationFont("Montserrat-Regular.ttf")
-    print(QtGui.QFontDatabase.applicationFontFamilies(_id))
-
-    # default_sequence = GifSequence.open("test.gif")
     default_sequence = GifSequence.from_frames([GifFrame.from_array(array=np.zeros((400, 400)), duration=50)])
     default_text_template = TextAnimationTemplate("Text 1")
     default_meme_template = MemeAnimationTemplate(text_templates=[default_text_template])
