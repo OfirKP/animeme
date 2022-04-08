@@ -104,7 +104,7 @@ class TextAnimationKeyframeCollection(KeyframeCollection):
 
 
 class TextAnimationKeyframe(Keyframe):
-    def __init__(self, frame_ind: int, position: Optional[Tuple[int, int]] = None, text_size=None):
+    def __init__(self, frame_ind: int, position: Optional[Tuple[int, int]] = None, text_size=50):
         super().__init__(frame_ind)
         if position is not None:
             self.x, self.y = position
