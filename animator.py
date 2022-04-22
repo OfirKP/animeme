@@ -200,7 +200,7 @@ class TrackerPropertiesPanel(QWidget):
         self.track_next_frame_button = QPushButton('Track Next Frame')
         self.track_next_frame_button.clicked.connect(self.on_next_frame)
         self.track_previous_frame_button = QPushButton('Track Previous Frame')
-        # self.track_next_frame_button.clicked.connect(self.on_prev_frame)
+        self.track_previous_frame_button.clicked.connect(self.on_prev_frame)
 
         layout = QFormLayout()
         layout.addRow(self.toggle_tracker_button)
@@ -209,25 +209,28 @@ class TrackerPropertiesPanel(QWidget):
         group_box.setLayout(layout)
 
     def on_tracker_mode(self):
-        self.parent.selected_text_template.add_tracker()
         self.parent.frames_viewer.tracker_mode = not self.parent.frames_viewer.tracker_mode
         # noinspection PyUnresolvedReferences
         self.tracker_properties_changed.emit()
 
     def on_next_frame(self):
-        frame_num = self.parent.current_frame_index
-        new_frame_num = frame_num + 1
+        self.track_frame(1)
 
+    def on_prev_frame(self):
+        self.track_frame(-1)
+
+    def track_frame(self, frame_diff):
+        if not self.parent.selected_text_template.tracker.active:
+            return
+        frame_num = self.parent.current_frame_index
+        new_frame_num = frame_num + frame_diff
+        if new_frame_num < 0 or new_frame_num > len(self.parent.sequence) - 1:
+            return
         # Get current text keyframe, so we can access the position
         keyframe = self.parent.selected_text_template.keyframes.get_keyframe(frame_num)
-
-        # Move to the new frame
-        self.parent.frames_slider.setValue(new_frame_num)
-
         # Get the new frame and run the tracker on it to get the new bounding box
-        frame = qimage2ndarray.rgb_view(self.parent.frames_viewer.current_pixmap.toImage())
-        delta = self.parent.selected_text_template.tracker.update(frame)
-
+        new_frame = qimage2ndarray.rgb_view(self.parent.frames_viewer.pixmaps[new_frame_num].toImage())
+        delta = self.parent.selected_text_template.tracker.update(new_frame)
         # Calculate the new keyframe position as the old position plus the delta we get from the tracker
         new_position = (keyframe.x + delta.x(), keyframe.y + delta.y())
         new_keyframe = TextAnimationKeyframe(
@@ -235,6 +238,9 @@ class TrackerPropertiesPanel(QWidget):
             position=new_position
         )
         self.parent.selected_text_template.keyframes.insert_keyframe(new_keyframe)
+
+        # Update the viewer to the next frame
+        self.parent.frames_slider.setValue(new_frame_num)
 
 
 class FramePropertiesPanel(QWidget):
@@ -756,7 +762,7 @@ class MainWindow(QMainWindow):
 if __name__ == '__main__':
     app = QApplication([])
     _id = QtGui.QFontDatabase.addApplicationFont("Montserrat-Regular.ttf")
-    obama_sequence = GifSequence.open('/home/victor/Pictures/rory-mc-ilroy-golf.gif')
+    obama_sequence = GifSequence.open('/home/victor/Pictures/cars-race.gif')
     default_sequence = GifSequence.from_frames(10*[GifFrame.from_array(array=np.zeros((400, 400)), duration=50)])
     default_text_template = TextAnimationTemplate("Text 1")
     default_meme_template = MemeAnimationTemplate(text_templates=[default_text_template])
