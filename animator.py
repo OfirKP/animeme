@@ -179,6 +179,64 @@ class TextTemplatePropertiesPanel(QWidget):
         self.text_template_properties_changed.emit()
 
 
+class TrackerPropertiesPanel(QWidget):
+    tracker_properties_changed = Signal()
+
+    def __init__(self, parent: 'MainWindow'):
+        super().__init__()
+
+        self.parent = parent
+        layout = QGridLayout()
+        self.setLayout(layout)
+
+        group_box = QGroupBox("Tracker Properties")
+        layout.addWidget(group_box)
+
+        self.toggle_tracker_button = QPushButton('Tracker Mode')
+        self.toggle_tracker_button.setCheckable(True)
+        self.toggle_tracker_button.setChecked(False)
+        self.toggle_tracker_button.clicked.connect(self.on_tracker_mode)
+
+        self.track_next_frame_button = QPushButton('Track Next Frame')
+        self.track_next_frame_button.clicked.connect(self.on_next_frame)
+        self.track_previous_frame_button = QPushButton('Track Previous Frame')
+        # self.track_next_frame_button.clicked.connect(self.on_prev_frame)
+
+        layout = QFormLayout()
+        layout.addRow(self.toggle_tracker_button)
+        layout.addRow(self.track_next_frame_button)
+        layout.addRow(self.track_previous_frame_button)
+        group_box.setLayout(layout)
+
+    def on_tracker_mode(self):
+        self.parent.selected_text_template.add_tracker()
+        self.parent.frames_viewer.tracker_mode = not self.parent.frames_viewer.tracker_mode
+        # noinspection PyUnresolvedReferences
+        self.tracker_properties_changed.emit()
+
+    def on_next_frame(self):
+        frame_num = self.parent.current_frame_index
+        new_frame_num = frame_num + 1
+
+        # Get current text keyframe, so we can access the position
+        keyframe = self.parent.selected_text_template.keyframes.get_keyframe(frame_num)
+
+        # Move to the new frame
+        self.parent.frames_slider.setValue(new_frame_num)
+
+        # Get the new frame and run the tracker on it to get the new bounding box
+        frame = qimage2ndarray.rgb_view(self.parent.frames_viewer.current_pixmap.toImage())
+        delta = self.parent.selected_text_template.tracker.update(frame)
+
+        # Calculate the new keyframe position as the old position plus the delta we get from the tracker
+        new_position = (keyframe.x + delta.x(), keyframe.y + delta.y())
+        new_keyframe = TextAnimationKeyframe(
+            frame_ind=new_frame_num,
+            position=new_position
+        )
+        self.parent.selected_text_template.keyframes.insert_keyframe(new_keyframe)
+
+
 class FramePropertiesPanel(QWidget):
     def __init__(self, parent):
         super().__init__()
@@ -342,32 +400,49 @@ class FramesViewer(QLabel):
         self.text_template_to_rect = {}
         self.rubberBand = QRubberBand(QRubberBand.Rectangle, self)
         self.rubberBand.show()
-        self.setPixmap(self.pixmaps[self.selected_frame_ind])
+        self.current_pixmap = self.pixmaps[self.selected_frame_ind]
+        self.setPixmap(self.current_pixmap)
+
+        # Set tracker mode, if this mode is active clicking and dragging will create a tracking rectangle on the viewer
+        # instead of moving the current text template.
+        self.tracker_mode = False
 
     def load_sequence(self, sequence: GifSequence):
         self.pixmaps = [QPixmap.fromImage(qimage2ndarray.array2qimage(frame.array)) for frame in sequence]
 
     def mousePressEvent(self, e: QMouseEvent):
-        for text_template in self.parent.meme_template.templates_list:
-            if text_template.id in self.text_template_to_rect \
-                    and text_template.id != self.parent.selected_text_template.id \
-                    and self.text_template_to_rect[text_template.id].contains(e.pos()):
-                self.parent.change_selected_text_template(text_template.id)
-                self.update()
-                return
+        if self.tracker_mode:
+            self.parent.selected_text_template.tracker.begin = e.pos()
+            self.parent.selected_text_template.tracker.end = e.pos()
+        else:
+            for text_template in self.parent.meme_template.templates_list:
+                if text_template.id in self.text_template_to_rect \
+                        and text_template.id != self.parent.selected_text_template.id \
+                        and self.text_template_to_rect[text_template.id].contains(e.pos()):
+                    self.parent.change_selected_text_template(text_template.id)
+                    self.update()
+                    return
 
-        self.parent.selected_text_template.keyframes.insert_keyframe(
-            TextAnimationKeyframe(frame_ind=self.selected_frame_ind, position=(e.x(), e.y()))
-        )
-        self.parent.frame_properties_panel.on_selected_frame_change()
+            self.parent.selected_text_template.keyframes.insert_keyframe(
+                TextAnimationKeyframe(frame_ind=self.selected_frame_ind, position=(e.x(), e.y()))
+            )
+            self.parent.frame_properties_panel.on_selected_frame_change()
         self.update()
 
     def mouseMoveEvent(self, e: QMouseEvent):
-        self.parent.selected_text_template.keyframes.insert_keyframe(
-            TextAnimationKeyframe(frame_ind=self.selected_frame_ind, position=(e.x(), e.y()))
-        )
-        self.parent.frame_properties_panel.on_selected_frame_change()
+        if self.tracker_mode:
+            self.parent.selected_text_template.tracker.end = e.pos()
+        else:
+            self.parent.selected_text_template.keyframes.insert_keyframe(
+                TextAnimationKeyframe(frame_ind=self.selected_frame_ind, position=(e.x(), e.y()))
+            )
+            self.parent.frame_properties_panel.on_selected_frame_change()
         self.update()
+
+    def mouseReleaseEvent(self, e: QMouseEvent):
+        if self.tracker_mode:
+            frame = qimage2ndarray.rgb_view(self.current_pixmap.toImage())
+            self.parent.selected_text_template.tracker.initialize(frame)
 
     def paintEvent(self, e: QPaintEvent):
         super().paintEvent(e)
@@ -404,7 +479,7 @@ class FramesViewer(QLabel):
                 self.rubberBand.setGeometry(rubber_rect)
 
             if text_template.stroke_width:
-                painter.setRenderHint(QPainter.Antialiasing, True)
+                painter.setRenderHint(QPainter.Antialiasing)
                 brush.setColor(QColor(text_template.text_color))
                 painter.setBrush(brush)
 
@@ -433,11 +508,17 @@ class FramesViewer(QLabel):
             else:
                 painter.drawText(text_rect, Qt.AlignHCenter | Qt.AlignVCenter, text_template.text_value)
 
+        # Paint the tracking rectangle if applicable
+        if self.tracker_mode:
+            tracker_rect_brush = QtGui.QColor(100, 10, 10, 40)
+            painter.setBrush(tracker_rect_brush)
+            painter.drawRect(self.parent.selected_text_template.tracker.rect)
         painter.end()
 
     def handle_frame_update(self, frame_ind: int):
         self.selected_frame_ind = frame_ind
-        self.setPixmap(self.pixmaps[self.selected_frame_ind])
+        self.current_pixmap = self.pixmaps[self.selected_frame_ind]
+        self.setPixmap(self.current_pixmap)
 
 
 class MainWindow(QMainWindow):
@@ -449,12 +530,14 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"Animator")
         self.sequence = sequence
         self.meme_template = meme_template
-        self.selected_text_template = meme_template.templates_list[0]
+        self.selected_text_template: TextAnimationTemplate = meme_template.templates_list[0]
         self.current_frame_index = 0
 
         # self.keyframes_indicator = KeyframesIndicator(self)
         self.frame_properties_panel = FramePropertiesPanel(parent=self)
         self.frame_properties_panel.on_selected_frame_change()
+
+        self.tracker_properties_panel = TrackerPropertiesPanel(parent=self)
 
         self.text_template_properties_panel = TextTemplatePropertiesPanel(parent=self)
         # noinspection PyUnresolvedReferences
@@ -474,6 +557,8 @@ class MainWindow(QMainWindow):
 
         # noinspection PyUnresolvedReferences
         self.text_template_properties_panel.text_template_properties_changed.connect(self.frames_viewer.update)
+        # noinspection PyUnresolvedReferences
+        self.tracker_properties_panel.tracker_properties_changed.connect(self.frames_viewer.update)
 
         left_side_widget = QWidget()
         left_layout = QVBoxLayout()
@@ -519,15 +604,15 @@ class MainWindow(QMainWindow):
         self.template_selection_panel = TemplateSelectionPanel(self)
         # noinspection PyUnresolvedReferences
         self.selected_text_template_changed.connect(
-            lambda _: self.frame_properties_panel.on_selected_frame_change()
+            lambda: self.frame_properties_panel.on_selected_frame_change()
         )
         # noinspection PyUnresolvedReferences
         self.selected_text_template_changed.connect(
-            lambda _: self.template_selection_panel.refresh_selector()
+            lambda: self.template_selection_panel.refresh_selector()
         )
         # noinspection PyUnresolvedReferences
         self.selected_text_template_changed.connect(
-            lambda _: self.frames_viewer.update()
+            lambda: self.frames_viewer.update()
         )
 
         left_layout.addWidget(self.frames_viewer)
@@ -542,6 +627,7 @@ class MainWindow(QMainWindow):
         right_layout = QVBoxLayout()
         right_layout.addWidget(self.frame_properties_panel)
         right_layout.addWidget(self.text_template_properties_panel)
+        right_layout.addWidget(self.tracker_properties_panel)
         right_side_widget.setLayout(right_layout)
 
         main_widget = QWidget()
@@ -670,10 +756,11 @@ class MainWindow(QMainWindow):
 if __name__ == '__main__':
     app = QApplication([])
     _id = QtGui.QFontDatabase.addApplicationFont("Montserrat-Regular.ttf")
+    obama_sequence = GifSequence.open('/home/victor/Pictures/rory-mc-ilroy-golf.gif')
     default_sequence = GifSequence.from_frames(10*[GifFrame.from_array(array=np.zeros((400, 400)), duration=50)])
     default_text_template = TextAnimationTemplate("Text 1")
     default_meme_template = MemeAnimationTemplate(text_templates=[default_text_template])
-    window = MainWindow(sequence=default_sequence, meme_template=default_meme_template)
+    window = MainWindow(sequence=obama_sequence, meme_template=default_meme_template)
     window.show()
 
     app.exec_()
