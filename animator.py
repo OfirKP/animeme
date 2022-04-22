@@ -209,7 +209,9 @@ class TrackerPropertiesPanel(QWidget):
         group_box.setLayout(layout)
 
     def on_tracker_mode(self):
-        self.parent.frames_viewer.tracker_mode = not self.parent.frames_viewer.tracker_mode
+        tracker_mode_enabled = self.parent.frames_viewer.tracker_mode
+        self.parent.frames_viewer.tracker_mode = not tracker_mode_enabled
+        self.parent.frames_slider.setEnabled(tracker_mode_enabled)
         # noinspection PyUnresolvedReferences
         self.tracker_properties_changed.emit()
 
