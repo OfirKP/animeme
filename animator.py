@@ -212,6 +212,7 @@ class TrackerPropertiesPanel(QWidget):
         tracker_mode_enabled = self.parent.frames_viewer.tracker_mode
         self.parent.frames_viewer.tracker_mode = not tracker_mode_enabled
         self.parent.frames_slider.setEnabled(tracker_mode_enabled)
+        self.parent.selected_text_template.tracker.reset()
         # noinspection PyUnresolvedReferences
         self.tracker_properties_changed.emit()
 
@@ -228,8 +229,12 @@ class TrackerPropertiesPanel(QWidget):
         new_frame_num = frame_num + frame_diff
         if new_frame_num < 0 or new_frame_num > len(self.parent.sequence) - 1:
             return
-        # Get current text keyframe, so we can access the position
-        keyframe = self.parent.selected_text_template.keyframes.get_keyframe(frame_num)
+        # Get current text keyframe, so we can access the position, create one from the current position
+        # if it doesn't exist
+        if frame_num not in self.parent.selected_text_template.keyframes.keyframes_frames_indices:
+            keyframe = self.parent.selected_text_template.keyframes.interpolate(frame_num)
+        else:
+            keyframe = self.parent.selected_text_template.keyframes.get_keyframe(frame_num)
         # Get the new frame and run the tracker on it to get the new bounding box
         new_frame = qimage2ndarray.rgb_view(self.parent.frames_viewer.pixmaps[new_frame_num].toImage())
         delta = self.parent.selected_text_template.tracker.update(new_frame)
@@ -755,10 +760,16 @@ class MainWindow(QMainWindow):
         """
         Add hotkeys
         """
-        if e.key() == Qt.Key_L:
-            self.frames_slider.setValue(self.current_frame_index + 1)
-        elif e.key() == Qt.Key_J:
-            self.frames_slider.setValue(self.current_frame_index - 1)
+        if not self.selected_text_template.tracker.active:
+            if e.key() == Qt.Key_L:
+                self.frames_slider.setValue(self.current_frame_index + 1)
+            elif e.key() == Qt.Key_J:
+                self.frames_slider.setValue(self.current_frame_index - 1)
+        else:
+            if e.key() == Qt.Key_L:
+                self.tracker_properties_panel.on_next_frame()
+            elif e.key() == Qt.Key_J:
+                self.tracker_properties_panel.on_prev_frame()
 
 
 if __name__ == '__main__':

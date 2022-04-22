@@ -39,14 +39,17 @@ class Tracker:
         center = QtCore.QPoint(int((self.end.x() + self.begin.x()) / 2), int((self.end.y() + self.begin.y()) / 2))
         return center
 
+    def reset(self):
+        self.begin = QtCore.QPoint()
+        self.end = QtCore.QPoint()
+
     def update(self, frame):
         # bbox will be in format (x, y, w, h)
         old_center = self.center()
         ok, new_bbox = self._tracker.update(frame)
         if not ok:
             self.failed = True
-            self.begin = QtCore.QPoint()
-            self.end = QtCore.QPoint()
+            self.reset()
             # Return an empty delta so the text doesn't move
             return QtCore.QPoint()
         self.begin = QtCore.QPoint(new_bbox[0], new_bbox[1])
