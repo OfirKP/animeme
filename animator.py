@@ -760,7 +760,7 @@ class MainWindow(QMainWindow):
         """
         Add hotkeys
         """
-        if not self.selected_text_template.tracker.active:
+        if not self.selected_text_template.tracker.active and not self.frames_viewer.tracker_mode:
             if e.key() == Qt.Key_L:
                 self.frames_slider.setValue(self.current_frame_index + 1)
             elif e.key() == Qt.Key_J:
@@ -775,7 +775,7 @@ class MainWindow(QMainWindow):
 if __name__ == '__main__':
     app = QApplication([])
     _id = QtGui.QFontDatabase.addApplicationFont("Montserrat-Regular.ttf")
-    obama_sequence = GifSequence.open('/home/victor/Pictures/cars-race.gif')
+    obama_sequence = GifSequence.open('/home/victor/Pictures/gifs/f1-max.gif')
     default_sequence = GifSequence.from_frames(10*[GifFrame.from_array(array=np.zeros((400, 400)), duration=50)])
     default_text_template = TextAnimationTemplate("Text 1")
     default_meme_template = MemeAnimationTemplate(text_templates=[default_text_template])
