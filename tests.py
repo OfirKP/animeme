@@ -47,7 +47,7 @@ def test_position_text_template(qtbot, main_window):
     test_default_frame_viewer = main_window.frames_viewer.grab().toImage()
     test_default_frame_viewer.save("/tmp/test_position_text_template.png", quality=100)
 
-    assert QtGui.QImage('/tmp/test.png') == correct_default_frame_viewer
+    assert QtGui.QImage('/tmp/test_position_text_template.png') == correct_default_frame_viewer
 
 
 def test_click_to_select(qtbot, main_window):

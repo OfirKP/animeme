@@ -6,6 +6,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from gif import GifSequence, GifFrame
 from keyframes import TextAnimationKeyframeCollection, TextAnimationKeyframe
+from tracker import Tracker
 
 
 class AnimationTemplate(ABC):
@@ -33,6 +34,11 @@ class TextAnimationTemplate(AnimationTemplate):
         self.background_color: Optional[Tuple] = None
         self.stroke_width: int = 2
         self.stroke_color: str = "#000"
+
+        self.tracker = Tracker()
+
+    def add_tracker(self):
+        self.tracker.add()
 
     def render(self, sequence: GifSequence):
         rendered_frames = []
