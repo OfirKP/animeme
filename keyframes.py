@@ -33,6 +33,12 @@ class KeyframeCollection(ABC):
     def insert_keyframe(self, keyframe: Keyframe):
         insertion_index = bisect.bisect_left(self._keyframes, keyframe)
 
+        if self._keyframes:
+            if not keyframe.text_size:
+                keyframe.text_size = self._keyframes[max(0, insertion_index - 1)].text_size
+        else:
+            keyframe.text_size = TextAnimationKeyframeCollection.DEFAULT_TEXT_SIZE
+
         if insertion_index < len(self) and keyframe.frame_ind == self._keyframes[insertion_index].frame_ind:
             self._keyframes[insertion_index].update_keyframe(new_keyframe=keyframe)
         else:
@@ -104,7 +110,7 @@ class TextAnimationKeyframeCollection(KeyframeCollection):
 
 
 class TextAnimationKeyframe(Keyframe):
-    def __init__(self, frame_ind: int, position: Optional[Tuple[int, int]] = None, text_size=50):
+    def __init__(self, frame_ind: int, position: Optional[Tuple[int, int]] = None, text_size=None):
         super().__init__(frame_ind)
         if position is not None:
             self.x, self.y = position

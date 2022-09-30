@@ -437,7 +437,10 @@ class FramesViewer(QLabel):
                     return
 
             self.parent.selected_text_template.keyframes.insert_keyframe(
-                TextAnimationKeyframe(frame_ind=self.selected_frame_ind, position=(e.x(), e.y()))
+                TextAnimationKeyframe(
+                    frame_ind=self.selected_frame_ind,
+                    position=(e.x(), e.y())
+                )
             )
             self.parent.frame_properties_panel.on_selected_frame_change()
         self.update()

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from PyQt5 import QtGui
-from PyQt5.QtCore import QPoint
+from PyQt5.QtCore import QPoint, Qt
 from pytestqt.qt_compat import qt_api
 
 from animator import MainWindow
@@ -12,7 +12,7 @@ from templates import TextAnimationTemplate, MemeAnimationTemplate
 @pytest.fixture
 def main_window():
     _id = QtGui.QFontDatabase.addApplicationFont("Montserrat-Regular.ttf")
-    default_sequence = GifSequence.from_frames([GifFrame.from_array(array=np.zeros((400, 400)), duration=50)])
+    default_sequence = GifSequence.from_frames(10*[GifFrame.from_array(array=np.zeros((400, 400)), duration=50)])
     default_text_template = TextAnimationTemplate("Text 1")
     default_meme_template = MemeAnimationTemplate(text_templates=[default_text_template])
     window = MainWindow(sequence=default_sequence, meme_template=default_meme_template)
@@ -54,11 +54,28 @@ def test_click_to_select(qtbot, main_window):
     qtbot.addWidget(main_window)
     # Move the default text to somewhere else
     qtbot.mouseClick(main_window.frames_viewer, qt_api.QtCore.Qt.MouseButton.LeftButton, pos=QPoint(300, 300))
-    qtbot.wait(10)
+    qtbot.wait(100)
     # Create new text, should be selected automatically now
     qtbot.mouseClick(main_window.add_text_template_button, qt_api.QtCore.Qt.MouseButton.LeftButton)
+    qtbot.wait(100)
+    # Click on the previous, moved, text and expect it to be selected now, instead of moving the new text
+    qtbot.mouseClick(main_window.frames_viewer, qt_api.QtCore.Qt.MouseButton.LeftButton, pos=QPoint(300, 300))
+    qtbot.wait(100)
+    assert main_window.selected_text_template.id == 'Text 1'
+
+
+def test_sticky_keyframes(qtbot, main_window):
+    qtbot.addWidget(main_window)
+    # Move the default text to somewhere to create an initial keyframe
+    qtbot.mouseClick(main_window.frames_viewer, qt_api.QtCore.Qt.MouseButton.LeftButton, pos=QPoint(100, 100))
+    # Set the text_size lower
+    qtbot.wait(10)
+    main_window.frame_properties_panel.textSizeEdit.setText('20')
+    qtbot.keyPress(main_window.frame_properties_panel.textSizeEdit, Qt.Key_Enter)
+    qtbot.wait(10)
+    qtbot.keyPress(main_window.frames_slider, Qt.Key_Right)
     qtbot.wait(10)
     # Click on the previous, moved, text and expect it to be selected now, instead of moving the new text
     qtbot.mouseClick(main_window.frames_viewer, qt_api.QtCore.Qt.MouseButton.LeftButton, pos=QPoint(300, 300))
     qtbot.wait(10)
-    assert main_window.selected_text_template.id == 'Text 1'
+    assert main_window.selected_text_template.keyframes.get_keyframe(1).text_size == 20
