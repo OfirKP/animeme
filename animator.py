@@ -760,7 +760,7 @@ class MainWindow(QMainWindow):
         """
         Add hotkeys
         """
-        if not self.selected_text_template.tracker.active:
+        if not self.selected_text_template.tracker.active and not self.frames_viewer.tracker_mode:
             if e.key() == Qt.Key_L:
                 self.frames_slider.setValue(self.current_frame_index + 1)
             elif e.key() == Qt.Key_J:
