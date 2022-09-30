@@ -696,7 +696,11 @@ class MainWindow(QMainWindow):
     def on_click_save(self):
         file_path, _ = QFileDialog.getSaveFileName(self, 'Save Template as',
                                                    str(Path.home()), "JSON file (*.json)")
+
         if file_path:
+            # People might forget to add the correct extention, add it
+            if not file_path.endswith('.json'):
+                file_path += '.json'
             with open(file_path, mode='w') as f:
                 json.dump(self.meme_template.serialize(), fp=f, indent=4)
             gif_path = Path(file_path).with_suffix(".gif")
@@ -735,11 +739,17 @@ class MainWindow(QMainWindow):
             file_path, _ = QFileDialog.getSaveFileName(
                 self, 'Save animation as', str(Path.home()), "GIF file (*.gif)"
             )
-            self.meme_template.render(gif, list(self.meme_template.templates_dict.keys())).save(file_path, is_loop=True)
-            dlg = QMessageBox(self)
-            dlg.setWindowTitle("Done!")
-            dlg.setText(f"The gif was successfully rendered to {file_path}")
-            dlg.exec()
+            if file_path:
+                # People might forget to add the correct extention, add it
+                if not file_path.endswith('.gif'):
+                    file_path += '.gif'
+                self.meme_template.render(gif, list(self.meme_template.templates_dict.keys())).save(file_path, is_loop=True)
+                dlg = QMessageBox(self)
+                dlg.setWindowTitle("Done!")
+                dlg.setText(f"The gif was successfully rendered to {file_path}")
+                dlg.exec()
+            else:
+                self.statusBar().showMessage(f'File not saved: no path found.')
         else:
             dlg = QMessageBox(self)
             dlg.setWindowTitle("Error!")
@@ -776,7 +786,7 @@ if __name__ == '__main__':
     app = QApplication([])
     _id = QtGui.QFontDatabase.addApplicationFont("Montserrat-Regular.ttf")
     # obama_sequence = GifSequence.open('/home/victor/Pictures/cars-race.gif')
-    default_sequence = GifSequence.from_frames(10*[GifFrame.from_array(array=np.zeros((400, 640)), duration=50)])
+    default_sequence = GifSequence.from_frames(10*[GifFrame.from_array(array=np.zeros((400, 400)), duration=50)])
     default_text_template = TextAnimationTemplate("Text 1")
     default_meme_template = MemeAnimationTemplate(text_templates=[default_text_template])
     window = MainWindow(sequence=default_sequence, meme_template=default_meme_template)
