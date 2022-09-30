@@ -775,11 +775,11 @@ class MainWindow(QMainWindow):
 if __name__ == '__main__':
     app = QApplication([])
     _id = QtGui.QFontDatabase.addApplicationFont("Montserrat-Regular.ttf")
-    obama_sequence = GifSequence.open('/home/victor/Pictures/cars-race.gif')
-    default_sequence = GifSequence.from_frames(10*[GifFrame.from_array(array=np.zeros((400, 400)), duration=50)])
+    # obama_sequence = GifSequence.open('/home/victor/Pictures/cars-race.gif')
+    default_sequence = GifSequence.from_frames(10*[GifFrame.from_array(array=np.zeros((400, 640)), duration=50)])
     default_text_template = TextAnimationTemplate("Text 1")
     default_meme_template = MemeAnimationTemplate(text_templates=[default_text_template])
-    window = MainWindow(sequence=obama_sequence, meme_template=default_meme_template)
+    window = MainWindow(sequence=default_sequence, meme_template=default_meme_template)
     window.show()
 
     app.exec_()
